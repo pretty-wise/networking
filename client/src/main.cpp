@@ -10,6 +10,13 @@ bool g_running = true;
 void term_handler(int signal) { g_running = false; }
 
 int main(int argc, char *argv[]) {
+  if(SIG_ERR == signal(SIGINT, term_handler)) {
+    return -1;
+  }
+  if(SIG_ERR == signal(SIGTERM, term_handler)) {
+    return -1;
+  }
+
   if(argc < 2) {
     return -1;
   }
