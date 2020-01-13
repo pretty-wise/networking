@@ -40,6 +40,45 @@ int create_udp_addr(const char *hostname, uint16_t port,
   return 0;
 }
 
+int sock_addr_cmp_addr(const struct sockaddr_storage *sa,
+                       const struct sockaddr_storage *sb) {
+  if(sa->ss_family != sb->ss_family)
+    return (sa->ss_family - sb->ss_family);
+
+  /*
+   * With IPv6 address structures, assume a non-hostile implementation that
+   * stores the address as a contiguous sequence of bits. Any holes in the
+   * sequence would invalidate the use of memcmp().
+   */
+  if(sa->ss_family == AF_INET) {
+    return ((sockaddr_in *)sa)->sin_addr.s_addr -
+           ((sockaddr_in *)sb)->sin_addr.s_addr;
+  } else if(sa->ss_family == AF_INET6) {
+    return (memcmp((char *)((sockaddr_in6 *)sa), (char *)((sockaddr_in6 *)sb),
+                   sizeof(sockaddr_in6)));
+  }
+  return -1;
+}
+
+/* sock_addr_cmp_port - compare ports for equality */
+
+int sock_addr_cmp_port(const struct sockaddr_storage *sa,
+                       const struct sockaddr_storage *sb) {
+  if(sa->ss_family != sb->ss_family)
+    return (sa->ss_family - sb->ss_family);
+
+  if(sa->ss_family == AF_INET) {
+    return ((sockaddr_in *)sa)->sin_port - ((sockaddr_in *)sb)->sin_port;
+  } else if(sa->ss_family == AF_INET6) {
+    return ((sockaddr_in6 *)sa)->sin6_port - ((sockaddr_in6 *)sb)->sin6_port;
+  }
+  return -1;
+}
+int sockaddr_compare(const sockaddr_storage *a, const sockaddr_storage *b) {
+  return sock_addr_cmp_addr(a, b) == 0 && sock_addr_cmp_port(a, b) == 0 ? 0
+                                                                        : -1;
+}
+
 int open_socket(uint16_t *port) {
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));

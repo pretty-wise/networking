@@ -5,6 +5,8 @@
 int create_udp_addr(const char *hostname, uint16_t port,
                     sockaddr_storage *addr);
 
+int sockaddr_compare(const sockaddr_storage *a, const sockaddr_storage *b);
+
 int open_socket(uint16_t *port);
 
 size_t socket_receive(int handle, void *buffer, size_t nbytes,

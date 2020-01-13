@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.16)
 project(networking)
 
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -8,12 +9,11 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # compiler options
 #
 
-set (CMAKE_C_FLAGS                "-Wall -m64 -std=c99 -fPIC -Wno-unused-function -Wno-expansion-to-defined")
-set (CMAKE_C_FLAGS_DEBUG          "-g -DDEBUG")
-set (CMAKE_C_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
-set (CMAKE_C_FLAGS_RELEASE        "-O4 -DNDEBUG")
-set (CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
-set (CMAKE_DEBUG_POSTFIX          "d")
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_BUILD_TYPE Debug)
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG -D_DEBUG")
 
 #
 # common library
@@ -39,6 +39,8 @@ target_include_directories (common PUBLIC
 
 add_executable (server
 	server/src/main.cpp
+	server/src/server.h
+	server/src/server.cpp
 )
 
 target_link_libraries(server PRIVATE common)
@@ -49,6 +51,8 @@ target_link_libraries(server PRIVATE common)
 
 add_executable (client
 	client/src/main.cpp
+	client/src/client.h
+	client/src/client.cpp
 )
 
 target_link_libraries(client PRIVATE common)
