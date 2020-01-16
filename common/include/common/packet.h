@@ -1,14 +1,20 @@
+#pragma once
 #include <cstdint>
 #include <limits>
 
 typedef uint16_t sequence_t;
+typedef uint32_t sequence_bitmask_t;
 
 inline bool IsMoreRecent(sequence_t a, sequence_t b) {
   return ((a > b) && (a - b <= std::numeric_limits<sequence_t>::max() / 2)) ||
          ((b > a) && (b - a > std::numeric_limits<sequence_t>::max() / 2));
 }
 
-inline sequence_t Diff(sequence_t a, sequence_t b) {
+inline bool IsLessRecent(sequence_t a, sequence_t b) {
+  return IsMoreRecent(b, a);
+}
+
+inline sequence_t Distance(sequence_t a, sequence_t b) {
   // return a - b;
   return (a >= b) ? a - b
                   : (std::numeric_limits<sequence_t>::max() - b) + a + 1;
@@ -50,4 +56,7 @@ struct ConnectionEstablishPacket {
 struct PayloadPacket {
   uint32_t m_protocol_id;
   PacketType m_type;
+  sequence_t m_sequence;
+  sequence_t m_ack;
+  sequence_bitmask_t m_ack_bitmask;
 };

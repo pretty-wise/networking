@@ -1,5 +1,5 @@
 
-#include "common/endpoint.h"
+#include "common/reliability.h"
 #include "common/time.h"
 #include "server.h"
 #include <memory>
@@ -12,6 +12,7 @@ void term_handler(int signal) { g_running = false; }
 Server *m_server;
 
 int main(int argc, char *argv[]) {
+  Reliability::Test();
   if(SIG_ERR == signal(SIGINT, term_handler)) {
     return -1;
   }

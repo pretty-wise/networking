@@ -1,3 +1,5 @@
+#pragma once
+#include "common/reliability.h"
 #include <cstdint>
 #include <sys/socket.h>
 
@@ -12,6 +14,7 @@ struct ServerEndpoint {
   uint16_t m_server_salt;
   uint32_t m_last_recv_time;
   uint32_t m_last_send_time;
+  Reliability m_reliability;
 };
 
 class Server {

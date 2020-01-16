@@ -24,6 +24,8 @@ add_library (common STATIC
 	common/src/socket.cpp
 	common/include/common/time.h
 	common/src/time.cpp
+	common/include/common/reliability.h
+	common/src/reliability.cpp
 )
 
 target_include_directories (common PRIVATE src include)

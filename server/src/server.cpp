@@ -8,6 +8,12 @@
 #include <netdb.h>
 #include <unistd.h>
 
+// todo(kstasik): expose those to application
+static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
+  return 1;
+}
+static void ack_func(sequence_t ack) {}
+
 Server::Server(uint16_t &port, uint16_t num_endpoints)
     : m_endpoint_capacity(num_endpoints), m_endpoint_count(0), m_timeout(5000) {
   m_endpoints = new ServerEndpoint[num_endpoints];
@@ -22,13 +28,14 @@ Server::Server(uint16_t &port, uint16_t num_endpoints)
   }
   printf("server listening on port %d.\n", port);
 }
+
 Server::~Server() {
   close(m_socket);
   delete[] m_endpoints;
 }
 
 void Server::Update() {
-  size_t nbytes = 1500;
+  size_t nbytes = 1280;
   char buffer[nbytes];
   sockaddr_storage source;
   int error = 0;
@@ -78,6 +85,18 @@ void Server::Update() {
           e.m_state = ServerEndpoint::State::Connected;
           printf("client connected\n");
         }
+      } else if(header->m_type == PacketType::Payload &&
+                e.m_state == ServerEndpoint::State::Connected) {
+        auto *packet = (PayloadPacket *)buffer;
+        if(e.m_reliability.OnReceived(
+               packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
+               buffer + sizeof(PayloadPacket), nbytes - sizeof(PayloadPacket),
+
+               read_func, ack_func)) {
+          // dispatch
+          printf("received: PacketType::Payload seq %d. ack: %d\n",
+                 packet->m_sequence, packet->m_ack);
+        }
       }
     }
   } while(received > 0 && received != -1);
@@ -100,6 +119,8 @@ void Server::Update() {
       auto *header = (PayloadPacket *)buffer;
       header->m_protocol_id = game_protocol_id;
       header->m_type = PacketType::Payload;
+      header->m_sequence = endpoint.m_reliability.GenerateNewSequenceId(
+          &header->m_ack, &header->m_ack_bitmask);
       // todo(kstasik): add data
       size_t sent =
           socket_send(m_socket, &endpoint.m_address, buffer, nbytes, &error);
@@ -107,6 +128,7 @@ void Server::Update() {
         printf("send error %d\n", error);
       }
       endpoint.m_last_send_time = get_time_ms();
+      printf("sent: PacketType::Payload\n");
     }
   }
 

@@ -2,6 +2,12 @@
 #include "common/packet.h"
 #include <cstdio>
 
+// todo(kstasik): expose those to application
+static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
+  return 1;
+}
+static void ack_func(sequence_t ack) {}
+
 Client::Client(const char *server_address, uint16_t server_port)
     : m_state(State::Disconnected) {
   if(-1 == create_udp_addr(server_address, server_port, &m_server)) {
@@ -20,7 +26,7 @@ Client::Client(const char *server_address, uint16_t server_port)
 }
 
 void Client::Update() {
-  size_t nbytes = 1500;
+  size_t nbytes = 1280;
   char buffer[nbytes];
   int error = 0;
 
@@ -40,7 +46,9 @@ void Client::Update() {
     auto *header = (PayloadPacket *)buffer;
     header->m_protocol_id = game_protocol_id;
     header->m_type = PacketType::Payload;
-    // add payload
+    header->m_sequence = m_reliability.GenerateNewSequenceId(
+        &header->m_ack, &header->m_ack_bitmask);
+    // todo(kstasik): add payload
   }
 
   size_t sent =
@@ -74,9 +82,19 @@ void Client::Update() {
           m_state = State::Connecting;
         }
       } else if(header->m_type == PacketType::Payload &&
-                m_state == State::Connecting) {
+                (m_state == State::Connecting || m_state == State::Connected)) {
+        auto *packet = (PayloadPacket *)buffer;
         m_state = State::Connected;
-        printf("received: PacketType::Payload\n");
+        if(m_reliability.OnReceived(
+               packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
+               buffer + sizeof(PayloadPacket), nbytes - sizeof(PayloadPacket),
+               read_func, ack_func)) {
+          // dispatch
+          printf("received: PacketType::Payload seq %d. ack: %d\n",
+                 packet->m_sequence, packet->m_ack);
+        } else {
+          printf("received: PacketType::Payload. read error\n");
+        }
       }
     }
   } while(received > 0 && received != -1);

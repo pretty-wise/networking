@@ -1,3 +1,5 @@
+#pragma once
+#include "common/reliability.h"
 #include "common/socket.h"
 #include <cstdint>
 
@@ -22,4 +24,5 @@ private:
   } m_state;
   uint16_t m_client_salt;
   uint16_t m_server_salt;
+  Reliability m_reliability;
 };
