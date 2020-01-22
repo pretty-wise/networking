@@ -29,7 +29,7 @@ public:
   void RemoveEndpoint(uint32_t index);
 
 private:
-  uint32_t m_timeout;
+  uint32_t m_timeout; // todo(kstasik): cofigure this
   uint16_t m_endpoint_capacity;
   uint16_t m_endpoint_count;
   Endpoint *m_endpoints;

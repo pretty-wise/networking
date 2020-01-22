@@ -85,6 +85,9 @@ void Server::Update() {
           e.m_state = Endpoint::State::Connected;
           printf("client connected\n");
         }
+      } else if(header->m_type == PacketType::Disconnect) {
+        printf("client gracefully disconnected\n");
+        RemoveEndpoint(endpoint_index);
       } else if(header->m_type == PacketType::Payload &&
                 e.m_state == Endpoint::State::Connected) {
         auto *packet = (PayloadPacket *)buffer;
@@ -139,6 +142,7 @@ void Server::Update() {
       uint32_t time = get_time_ms() - endpoint.m_last_recv_time;
 
       if(time > m_timeout) {
+        printf("client timed out\n");
         RemoveEndpoint(i);
       }
     }
@@ -174,7 +178,6 @@ uint32_t Server::AddEndpoint(const sockaddr_storage &address,
   return -1;
 }
 void Server::RemoveEndpoint(uint32_t index) {
-  printf("removing endpoint %d\n", index);
   Endpoint &e = m_endpoints[index];
   e = {};
   --m_endpoint_count;

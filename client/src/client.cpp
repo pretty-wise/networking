@@ -9,23 +9,23 @@ static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
 static void ack_func(sequence_t ack) {}
 
 Client::Client(const char *server_address, uint16_t server_port)
-    : m_state(State::Disconnected) {
-  if(-1 == create_udp_addr(server_address, server_port, &m_server)) {
-    return;
-  }
+    : m_state(State::Disconnected), m_last_recv_time(0), m_last_send_time(0),
+      m_timeout(5000), m_socket(0) {
 
   uint16_t src_port = 0;
   m_socket = open_socket(&src_port);
   if(-1 == m_socket) {
     return;
   }
-
-  printf("src: %d, dst: %d\n", src_port, server_port);
-  m_state = State::Discovering;
-  m_client_salt = 1234; // todo(kstasik): better salt
+  Connect(server_address, server_port);
 }
 
+Client::~Client() { close_socket(m_socket); }
+
 void Client::Update() {
+  if(m_state == State::Disconnected)
+    return;
+
   size_t nbytes = 1280;
   char buffer[nbytes];
   int error = 0;
@@ -56,7 +56,10 @@ void Client::Update() {
   printf("sent %lubytes from %lubytes. error: %d\n", sent, nbytes, error);
   if(sent == -1) {
     printf("socket send error: %d\n", error);
+  } else {
+    m_last_send_time = get_time_ms();
   }
+
   sockaddr_storage source;
   size_t received = 0;
   do {
@@ -70,6 +73,9 @@ void Client::Update() {
         printf("discarding unknown protocol\n");
         continue;
       }
+
+      m_last_recv_time = get_time_ms();
+
       if(header->m_type == PacketType::Response &&
          m_state == State::Discovering) {
         auto *packet = (ConnectionResponsePacket *)buffer;
@@ -98,8 +104,61 @@ void Client::Update() {
       }
     }
   } while(received > 0 && received != -1);
+
+  // timeout
+  uint32_t time_since_last_msg = get_time_ms() - m_last_recv_time;
+  if(m_state != State::Disconnected && time_since_last_msg > m_timeout) {
+    printf("timed out. closing connection\n");
+    close_socket(m_socket);
+    m_socket = 0;
+    m_state = State::Disconnected;
+  }
 }
 
-void Client::Connect() {}
-void Client::Disconnect() {}
+bool Client::Connect(const char *server_address, uint16_t server_port) {
+  if(-1 == create_udp_addr(server_address, server_port, &m_server)) {
+    return false;
+  }
+
+  m_state = State::Discovering;
+  m_client_salt = (int16_t)get_time_ms();
+
+  // reset values to prevent instant timeout
+  m_last_recv_time = get_time_ms();
+  m_last_send_time = m_last_recv_time;
+  return true;
+}
+
+void Client::Disconnect() {
+  if(m_state == State::Disconnected)
+    return;
+
+  size_t nbytes = 1280;
+  char buffer[nbytes];
+  int error = 0;
+
+  m_state = State::Disconnected;
+
+  auto *header = (ConnectionDisconnectPacket *)buffer;
+  header->m_protocol_id = game_protocol_id;
+  header->m_type = PacketType::Disconnect;
+  header->m_key = m_client_salt ^ m_server_salt;
+  printf("sent: PacketType::Disconnect\n");
+
+  // best effort disconnection
+  int num_disconnect_packets = 10;
+  for(int i = 0; i < num_disconnect_packets; ++i) {
+    size_t sent =
+        socket_send(m_socket, &m_server, (const void *)buffer, nbytes, &error);
+    printf("sent %lubytes from %lubytes. error: %d\n", sent, nbytes, error);
+    if(sent == -1) {
+      printf("socket send error: %d\n", error);
+    } else {
+      m_last_send_time = get_time_ms();
+    }
+  }
+}
+
 bool Client::IsConnected() const { return m_state == State::Connected; }
+
+bool Client::IsDisconnected() const { return m_state == State::Disconnected; }

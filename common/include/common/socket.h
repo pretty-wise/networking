@@ -9,6 +9,7 @@ int create_udp_addr(const char *hostname, uint16_t port,
 int sockaddr_compare(const sockaddr_storage *a, const sockaddr_storage *b);
 
 int open_socket(uint16_t *port);
+void close_socket(int);
 
 size_t socket_receive(int handle, void *buffer, size_t nbytes,
                       struct sockaddr_storage *source, int *error);

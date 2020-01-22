@@ -29,6 +29,8 @@ int main(int argc, char *argv[]) {
 
     client->Update();
 
+    g_running = !client->IsDisconnected();
+
     uint64_t frame_end_time = get_time_us();
     const uint64_t desired_frame_time = 16000;
     uint64_t frame_time = frame_end_time - frame_start_time;

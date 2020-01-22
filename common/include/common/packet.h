@@ -21,10 +21,11 @@ inline sequence_t Distance(sequence_t a, sequence_t b) {
 }
 
 enum class PacketType : uint8_t {
-  Request = 1,   // client -> server
-  Response = 2,  // client <- server
-  Establish = 3, // client -> server
-  Payload = 4,   // client <-> server
+  Request = 1,    // client  -> server
+  Response = 2,   // client <- server
+  Establish = 3,  // client  -> server
+  Payload = 4,    // client <-> server
+  Disconnect = 5, // client  -> server
 };
 
 const uint32_t game_protocol_id = 0x1234;
@@ -48,6 +49,12 @@ struct ConnectionResponsePacket {
 };
 
 struct ConnectionEstablishPacket {
+  uint32_t m_protocol_id;
+  PacketType m_type;
+  uint32_t m_key;
+};
+
+struct ConnectionDisconnectPacket {
   uint32_t m_protocol_id;
   PacketType m_type;
   uint32_t m_key;
