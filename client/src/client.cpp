@@ -18,6 +18,7 @@ Client::Client(const char *server_address, uint16_t server_port)
   if(-1 == m_socket) {
     return;
   }
+  LOG_TRANSPORT_INF("started at port %d", src_port);
   Connect(server_address, server_port);
 }
 
