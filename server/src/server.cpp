@@ -16,10 +16,10 @@ static void ack_func(sequence_t ack) {}
 
 Server::Server(uint16_t &port, uint16_t num_endpoints)
     : m_endpoint_capacity(num_endpoints), m_endpoint_count(0), m_timeout(5000) {
-  m_endpoints = new ServerEndpoint[num_endpoints];
+  m_endpoints = new Endpoint[num_endpoints];
   for(auto i = 0; i < num_endpoints; ++i) {
-    ServerEndpoint &e = m_endpoints[i];
-    e.m_state = ServerEndpoint::State::Undefined;
+    Endpoint &e = m_endpoints[i];
+    e.m_state = Endpoint::State::Undefined;
   }
   m_socket = open_socket(&port);
   if(m_socket == -1) {
@@ -74,19 +74,19 @@ void Server::Update() {
         continue;
       }
 
-      ServerEndpoint &e = m_endpoints[endpoint_index];
+      Endpoint &e = m_endpoints[endpoint_index];
       e.m_last_recv_time = get_time_ms();
 
       if(header->m_type == PacketType::Establish &&
-         e.m_state == ServerEndpoint::State::Connecting) {
+         e.m_state == Endpoint::State::Connecting) {
         auto *packet = (ConnectionEstablishPacket *)buffer;
         printf("received: PacketType::Establish\n");
         if(packet->m_key == (e.m_client_salt ^ e.m_server_salt)) {
-          e.m_state = ServerEndpoint::State::Connected;
+          e.m_state = Endpoint::State::Connected;
           printf("client connected\n");
         }
       } else if(header->m_type == PacketType::Payload &&
-                e.m_state == ServerEndpoint::State::Connected) {
+                e.m_state == Endpoint::State::Connected) {
         auto *packet = (PayloadPacket *)buffer;
         if(e.m_reliability.OnReceived(
                packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
@@ -102,8 +102,8 @@ void Server::Update() {
   } while(received > 0 && received != -1);
 
   for(auto i = 0; i < m_endpoint_capacity; ++i) {
-    ServerEndpoint &endpoint = m_endpoints[i];
-    if(endpoint.m_state == ServerEndpoint::State::Connecting) {
+    Endpoint &endpoint = m_endpoints[i];
+    if(endpoint.m_state == Endpoint::State::Connecting) {
       auto *header = (ConnectionResponsePacket *)buffer;
       header->m_protocol_id = game_protocol_id;
       header->m_type = PacketType::Response;
@@ -115,7 +115,7 @@ void Server::Update() {
         printf("send error %d\n", error);
       }
       printf("sent: PacketType::Response\n");
-    } else if(endpoint.m_state == ServerEndpoint::State::Connected) {
+    } else if(endpoint.m_state == Endpoint::State::Connected) {
       auto *header = (PayloadPacket *)buffer;
       header->m_protocol_id = game_protocol_id;
       header->m_type = PacketType::Payload;
@@ -134,8 +134,8 @@ void Server::Update() {
 
   // timeout
   for(auto i = 0; i < m_endpoint_capacity; ++i) {
-    ServerEndpoint &endpoint = m_endpoints[i];
-    if(endpoint.m_state != ServerEndpoint::State::Undefined) {
+    Endpoint &endpoint = m_endpoints[i];
+    if(endpoint.m_state != Endpoint::State::Undefined) {
       uint32_t time = get_time_ms() - endpoint.m_last_recv_time;
 
       if(time > m_timeout) {
@@ -160,10 +160,10 @@ uint32_t Server::AddEndpoint(const sockaddr_storage &address,
     return -1;
   }
   for(auto i = 0; i < m_endpoint_capacity; ++i) {
-    ServerEndpoint &e = m_endpoints[i];
-    if(e.m_state == ServerEndpoint::State::Undefined) {
+    Endpoint &e = m_endpoints[i];
+    if(e.m_state == Endpoint::State::Undefined) {
       e.m_address = address;
-      e.m_state = ServerEndpoint::State::Connecting;
+      e.m_state = Endpoint::State::Connecting;
       e.m_client_salt = client_salt;
       e.m_server_salt = m_socket; // todo(kstasik): generate it better
       e.m_last_recv_time = get_time_ms();
@@ -175,7 +175,7 @@ uint32_t Server::AddEndpoint(const sockaddr_storage &address,
 }
 void Server::RemoveEndpoint(uint32_t index) {
   printf("removing endpoint %d\n", index);
-  ServerEndpoint &e = m_endpoints[index];
+  Endpoint &e = m_endpoints[index];
   e = {};
   --m_endpoint_count;
 }
