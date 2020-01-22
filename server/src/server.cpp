@@ -1,4 +1,5 @@
 #include "server.h"
+#include "common/log.h"
 #include "common/packet.h"
 #include "common/socket.h"
 #include "common/time.h"
@@ -23,10 +24,10 @@ Server::Server(uint16_t &port, uint16_t num_endpoints)
   }
   m_socket = open_socket(&port);
   if(m_socket == -1) {
-    printf("startup error\n");
+    LOG_TRANSPORT_ERR("startup error");
     return;
   }
-  printf("server listening on port %d.\n", port);
+  LOG_TRANSPORT_INF("server listening on port %d.", port);
 }
 
 Server::~Server() {
@@ -44,17 +45,18 @@ void Server::Update() {
   do {
     received = socket_receive(m_socket, buffer, nbytes, &source, &error);
     if(received == -1) {
-      printf("error %d\n", error);
+      LOG_TRANSPORT_DBG("error %d", error);
     } else if(received > 0) {
       char host[1024];
       char service[20];
       getnameinfo((const sockaddr *)&source, source.ss_len, host, sizeof(host),
                   service, sizeof(service), 0);
-      printf("received %lubytes from %s:%s\n", received, host, service);
+      LOG_TRANSPORT_DBG("received %lubytes from %s:%s", received, host,
+                        service);
 
       PacketHeader *header = (PacketHeader *)buffer;
       if(header->m_protocol_id != game_protocol_id) {
-        printf("discarding unknown protocol\n");
+        LOG_TRANSPORT_WAR("discarding unknown protocol");
         continue;
       }
 
@@ -63,14 +65,14 @@ void Server::Update() {
         auto *packet = (ConnectionRequestPacket *)buffer;
         endpoint_index = AddEndpoint(source, packet->m_client_salt);
         if(endpoint_index == -1) {
-          printf("cannot add endpoint\n");
+          LOG_TRANSPORT_WAR("cannot add endpoint");
           continue;
         }
-        printf("received: PacketType::Request\n");
+        LOG_TRANSPORT_DBG("received: PacketType::Request");
       }
 
       if(endpoint_index == -1) {
-        printf("unknown endpoint\n");
+        LOG_TRANSPORT_DBG("unknown endpoint");
         continue;
       }
 
@@ -80,13 +82,13 @@ void Server::Update() {
       if(header->m_type == PacketType::Establish &&
          e.m_state == Endpoint::State::Connecting) {
         auto *packet = (ConnectionEstablishPacket *)buffer;
-        printf("received: PacketType::Establish\n");
+        LOG_TRANSPORT_DBG("received: PacketType::Establish");
         if(packet->m_key == (e.m_client_salt ^ e.m_server_salt)) {
           e.m_state = Endpoint::State::Connected;
-          printf("client connected\n");
+          LOG_TRANSPORT_INF("client connected");
         }
       } else if(header->m_type == PacketType::Disconnect) {
-        printf("client gracefully disconnected\n");
+        LOG_TRANSPORT_INF("client gracefully disconnected");
         RemoveEndpoint(endpoint_index);
       } else if(header->m_type == PacketType::Payload &&
                 e.m_state == Endpoint::State::Connected) {
@@ -97,8 +99,8 @@ void Server::Update() {
 
                read_func, ack_func)) {
           // dispatch
-          printf("received: PacketType::Payload seq %d. ack: %d\n",
-                 packet->m_sequence, packet->m_ack);
+          LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
+                            packet->m_sequence, packet->m_ack);
         }
       }
     }
@@ -115,9 +117,9 @@ void Server::Update() {
       size_t sent =
           socket_send(m_socket, &endpoint.m_address, buffer, nbytes, &error);
       if(sent == -1) {
-        printf("send error %d\n", error);
+        LOG_TRANSPORT_ERR("send error %d", error);
       }
-      printf("sent: PacketType::Response\n");
+      LOG_TRANSPORT_DBG("sent: PacketType::Response");
     } else if(endpoint.m_state == Endpoint::State::Connected) {
       auto *header = (PayloadPacket *)buffer;
       header->m_protocol_id = game_protocol_id;
@@ -128,10 +130,10 @@ void Server::Update() {
       size_t sent =
           socket_send(m_socket, &endpoint.m_address, buffer, nbytes, &error);
       if(sent == -1) {
-        printf("send error %d\n", error);
+        LOG_TRANSPORT_ERR("send error %d", error);
       }
       endpoint.m_last_send_time = get_time_ms();
-      printf("sent: PacketType::Payload\n");
+      LOG_TRANSPORT_DBG("sent: PacketType::Payload");
     }
   }
 
@@ -142,7 +144,7 @@ void Server::Update() {
       uint32_t time = get_time_ms() - endpoint.m_last_recv_time;
 
       if(time > m_timeout) {
-        printf("client timed out\n");
+        LOG_TRANSPORT_INF("client timed out");
         RemoveEndpoint(i);
       }
     }

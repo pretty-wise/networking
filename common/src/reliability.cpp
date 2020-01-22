@@ -99,7 +99,7 @@ bool Reliability::OnReceived(sequence_t sequence, sequence_t ack,
         uint32_t rtt = get_time_ms() - sentInfo->m_send_time;
         // todo(kstasik): use rtt
         ack_func(id);
-        printf("acked: %d\n", id);
+        // printf("acked: %d\n", id);
       }
     }
     ack_bitmask >>= 1;
@@ -203,8 +203,8 @@ void Reliability::Test() {
 
       assert(IsAcked(sender_outboud_id, sender_ack, sender_ack_bitmask));
 
-      printf("sender: %d, ack: %d, bmask: %d\n", sender_outboud_id, sender_ack,
-             sender_ack_bitmask);
+      //("sender: %d, ack: %d, bmask: %d\n", sender_outboud_id, sender_ack,
+      //       sender_ack_bitmask);
       for(int a = 0; a < 32; ++a) {
         sequence_t check_id = (sequence_t)(sender_ack - a);
         int num_expected_acks = i + 1;
@@ -245,8 +245,9 @@ void Reliability::Test() {
                                     sender_ack_bitmask, nullptr, 0,
                                     test_read_func, test_ack_func);
 
-      printf("sender: %d, ack: %d, bmask: %d\n", sender_outboud_id, sender_ack,
-             sender_ack_bitmask);
+      // printf("sender: %d, ack: %d, bmask: %d\n", sender_outboud_id,
+      // sender_ack,
+      //       sender_ack_bitmask);
 
       for(int a = 0; a < 32; ++a) {
         sequence_t check_id = (sequence_t)(sender_ack - a);

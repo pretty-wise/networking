@@ -1,4 +1,5 @@
 #include "client.h"
+#include "common/log.h"
 #include "common/packet.h"
 #include <cstdio>
 
@@ -35,13 +36,13 @@ void Client::Update() {
     header->m_protocol_id = game_protocol_id;
     header->m_type = PacketType::Request;
     header->m_client_salt = m_client_salt;
-    printf("sent: PacketType::Request\n");
+    LOG_TRANSPORT_DBG("sent: PacketType::Request");
   } else if(m_state == State::Connecting) {
     auto *header = (ConnectionEstablishPacket *)buffer;
     header->m_protocol_id = game_protocol_id;
     header->m_type = PacketType::Establish;
     header->m_key = m_client_salt ^ m_server_salt;
-    printf("sent: PacketType::Establish\n");
+    LOG_TRANSPORT_DBG("sent: PacketType::Establish");
   } else if(m_state == State::Connected) {
     auto *header = (PayloadPacket *)buffer;
     header->m_protocol_id = game_protocol_id;
@@ -53,9 +54,10 @@ void Client::Update() {
 
   size_t sent =
       socket_send(m_socket, &m_server, (const void *)buffer, nbytes, &error);
-  printf("sent %lubytes from %lubytes. error: %d\n", sent, nbytes, error);
+  LOG_TRANSPORT_DBG("sent %lubytes from %lubytes. error: %d", sent, nbytes,
+                    error);
   if(sent == -1) {
-    printf("socket send error: %d\n", error);
+    LOG_TRANSPORT_ERR("socket send error: %d", error);
   } else {
     m_last_send_time = get_time_ms();
   }
@@ -66,11 +68,11 @@ void Client::Update() {
     received =
         socket_receive(m_socket, (void *)buffer, nbytes, &source, &error);
     if(received == -1) {
-      printf("error %d\n", error);
+      LOG_TRANSPORT_ERR("error %d", error);
     } else if(received > 0) {
       PacketHeader *header = (PacketHeader *)buffer;
       if(header->m_protocol_id != game_protocol_id) {
-        printf("discarding unknown protocol\n");
+        LOG_TRANSPORT_WAR("discarding unknown protocol");
         continue;
       }
 
@@ -80,26 +82,29 @@ void Client::Update() {
          m_state == State::Discovering) {
         auto *packet = (ConnectionResponsePacket *)buffer;
         if(packet->m_client_salt != m_client_salt) {
-          printf("salt mismatch. sent %u, received %u\n", m_client_salt,
-                 packet->m_client_salt);
+          LOG_TRANSPORT_WAR("salt mismatch. sent %u, received %u",
+                            m_client_salt, packet->m_client_salt);
         } else {
           m_server_salt = packet->m_server_salt;
-          printf("received: PacketType::Response\n");
+          LOG_TRANSPORT_DBG("received: PacketType::Response");
           m_state = State::Connecting;
         }
       } else if(header->m_type == PacketType::Payload &&
                 (m_state == State::Connecting || m_state == State::Connected)) {
         auto *packet = (PayloadPacket *)buffer;
-        m_state = State::Connected;
+        if(m_state == State::Connecting) {
+          m_state = State::Connected;
+          LOG_TRANSPORT_INF("connected");
+        }
         if(m_reliability.OnReceived(
                packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
                buffer + sizeof(PayloadPacket), nbytes - sizeof(PayloadPacket),
                read_func, ack_func)) {
           // dispatch
-          printf("received: PacketType::Payload seq %d. ack: %d\n",
-                 packet->m_sequence, packet->m_ack);
+          LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
+                            packet->m_sequence, packet->m_ack);
         } else {
-          printf("received: PacketType::Payload. read error\n");
+          LOG_TRANSPORT_DBG("received: PacketType::Payload. read error");
         }
       }
     }
@@ -108,7 +113,7 @@ void Client::Update() {
   // timeout
   uint32_t time_since_last_msg = get_time_ms() - m_last_recv_time;
   if(m_state != State::Disconnected && time_since_last_msg > m_timeout) {
-    printf("timed out. closing connection\n");
+    LOG_TRANSPORT_INF("connection timed out");
     close_socket(m_socket);
     m_socket = 0;
     m_state = State::Disconnected;
@@ -143,16 +148,17 @@ void Client::Disconnect() {
   header->m_protocol_id = game_protocol_id;
   header->m_type = PacketType::Disconnect;
   header->m_key = m_client_salt ^ m_server_salt;
-  printf("sent: PacketType::Disconnect\n");
+  LOG_TRANSPORT_DBG("sent: PacketType::Disconnect");
 
   // best effort disconnection
   int num_disconnect_packets = 10;
   for(int i = 0; i < num_disconnect_packets; ++i) {
     size_t sent =
         socket_send(m_socket, &m_server, (const void *)buffer, nbytes, &error);
-    printf("sent %lubytes from %lubytes. error: %d\n", sent, nbytes, error);
+    LOG_TRANSPORT_DBG("sent %lubytes from %lubytes. error: %d", sent, nbytes,
+                      error);
     if(sent == -1) {
-      printf("socket send error: %d\n", error);
+      LOG_TRANSPORT_ERR("socket send error: %d", error);
     } else {
       m_last_send_time = get_time_ms();
     }

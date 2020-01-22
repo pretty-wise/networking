@@ -26,6 +26,8 @@ add_library (common STATIC
 	common/src/time.cpp
 	common/include/common/reliability.h
 	common/src/reliability.cpp
+	common/include/common/log.h
+	common/src/log.cpp
 )
 
 target_include_directories (common PRIVATE src include)
