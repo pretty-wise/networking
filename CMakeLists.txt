@@ -15,6 +15,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_BUILD_TYPE Debug)
 set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG -D_DEBUG")
 
+add_subdirectory(extern/imgui)
+
 #
 # common library
 #
@@ -53,10 +55,18 @@ target_link_libraries(server PRIVATE common)
 # client library
 #
 
+find_package(glfw3)
+find_package(OpenGL)
+find_package(glew CONFIG)
+
 add_executable (client
-	client/src/main.cpp
+	client/src/main.mm
+	client/src/imgui_impl_opengl2.cpp
+	client/src/imgui_impl_opengl2.h
+	client/src/imgui_impl_osx.h
+	client/src/imgui_impl_osx.mm
 	client/src/client.h
 	client/src/client.cpp
 )
 
-target_link_libraries(client PRIVATE common)
+target_link_libraries(client PRIVATE common imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)
