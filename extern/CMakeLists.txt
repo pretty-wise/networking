@@ -5,7 +5,7 @@ find_package(glfw3)
 find_package(OpenGL)
 find_package(glew CONFIG)
 
-set(root ${CMAKE_CURRENT_SOURCE_DIR})
+set(root ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 set(phdrs ${root}/imgui.h)
 set(hdrs ${root}/imstb_rectpack.h ${root}/imstb_textedit.h ${root}/imstb_truetype.h
     ${root}/imgui_internal.h)
