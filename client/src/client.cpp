@@ -8,6 +8,7 @@ static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
   return 1;
 }
 static void ack_func(sequence_t ack) {}
+static void nack_func(sequence_t ack) {}
 
 Client::Client(const char *server_address, uint16_t server_port)
     : m_state(State::Disconnected), m_last_recv_time(0), m_last_send_time(0),
@@ -100,7 +101,7 @@ void Client::Update() {
         if(m_reliability.OnReceived(
                packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
                buffer + sizeof(PayloadPacket), nbytes - sizeof(PayloadPacket),
-               read_func, ack_func)) {
+               read_func, ack_func, nack_func)) {
           // dispatch
           LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
                             packet->m_sequence, packet->m_ack);

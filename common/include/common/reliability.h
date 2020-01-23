@@ -5,9 +5,9 @@
 #include <string.h>
 
 typedef void (*on_ack)(sequence_t);
-
-// return <= 0 to indicate an error
-typedef int (*process_packet)(sequence_t, const void *buffer, size_t nbytes);
+typedef void (*on_nack)(sequence_t);
+typedef int (*read_packet)(sequence_t, const void *buffer, size_t nbytes);
+typedef int (*write_packet)(sequence_t, void *buffer, size_t nbytes);
 
 class Reliability {
 public:
@@ -38,7 +38,8 @@ public:
   // dispatch acks if not already dispatched.
   bool OnReceived(sequence_t sequence, sequence_t ack,
                   sequence_bitmask_t ack_bitmask, const void *buffer,
-                  size_t nbytes, process_packet read_func, on_ack ack_func);
+                  size_t nbytes, read_packet read_func, on_ack ack_func,
+                  on_nack nack_func);
 
   static void Test();
 
@@ -52,8 +53,8 @@ private:
   OutboundPacketInfo &SetSentPacketInfo(sequence_t id);
   InboundPacketInfo &SetRecvPacketInfo(sequence_t id);
 
-  sequence_t m_local_head; // next id to be sent
-  sequence_t m_remote_head;
+  sequence_t m_local_head;  // next id to be sent
+  sequence_t m_remote_head; // last received id
 
   static const uint32_t kLogSize = 256;
   sequencelog_t m_sent_packets[kLogSize];
