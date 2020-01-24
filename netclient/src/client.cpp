@@ -1,6 +1,6 @@
 #include "client.h"
-#include "common/log.h"
-#include "common/packet.h"
+#include "netcommon/log.h"
+#include "netcommon/packet.h"
 #include <cstdio>
 
 // todo(kstasik): expose those to application

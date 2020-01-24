@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "imgui_impl_osx.h"
 #include "imgui_impl_opengl2.h"
+#include "netclient/netclient.h"
 #include <stdio.h>
 #import <Cocoa/Cocoa.h>
 #import <OpenGL/gl.h>
@@ -15,11 +16,21 @@
 
 @interface ImGuiExampleView : NSOpenGLView
 {
-    NSTimer*    animationTimer;
+    void* netClient;
+    NSTimer* animationTimer;
+    int serverPort;
 }
 @end
 
 @implementation ImGuiExampleView
+
+- (instancetype)initWithFrame:(NSRect)frameRect 
+                pixelFormat:(NSOpenGLPixelFormat *)format
+                serverPort:(int)port
+{
+    serverPort = port;
+    return [self initWithFrame:frameRect pixelFormat:format];
+}
 
 -(void)animationTimerFired:(NSTimer*)timer
 {
@@ -36,10 +47,14 @@
     if (swapInterval == 0)
         NSLog(@"Error: Cannot set swap interval.");
 #endif
+
+    netClient = netclient_create("127.0.0.1", serverPort);
 }
 
 -(void)updateAndDrawDemoView
 {
+    netclient_update(netClient);
+
     // Start the Dear ImGui frame
 	ImGui_ImplOpenGL2_NewFrame();
 	ImGui_ImplOSX_NewFrame(self);
@@ -136,6 +151,7 @@
 -(void)dealloc
 {
     animationTimer = nil;
+    netclient_destroy(netClient);
 }
 
 // Forward Mouse/Keyboard events to dear imgui OSX back-end. It returns true when imgui is expecting to use the event.
@@ -215,6 +231,8 @@
 	// Menu
     [self setupMenu];
 
+    int dst_port = [[[[NSProcessInfo processInfo] arguments] objectAtIndex:1] intValue];
+
     NSOpenGLPixelFormatAttribute attrs[] =
     {
         NSOpenGLPFADoubleBuffer,
@@ -223,7 +241,7 @@
     };
 
     NSOpenGLPixelFormat* format = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
-    ImGuiExampleView* view = [[ImGuiExampleView alloc] initWithFrame:self.window.frame pixelFormat:format];
+    ImGuiExampleView* view = [[ImGuiExampleView alloc] initWithFrame:self.window.frame pixelFormat:format serverPort:dst_port];
     format = nil;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
     if (floor(NSAppKitVersionNumber) > NSAppKitVersionNumber10_6)
@@ -268,6 +286,9 @@
 
 int main(int argc, const char* argv[])
 {
+    if(argc < 2) 
+        return -1;
+
 	@autoreleasepool
 	{
 		NSApp = [NSApplication sharedApplication];

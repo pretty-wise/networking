@@ -21,38 +21,76 @@ add_subdirectory(extern)
 # common library
 #
 
-add_library (common STATIC
-	common/include/common/socket.h
-	common/src/socket.cpp
-	common/include/common/time.h
-	common/src/time.cpp
-	common/include/common/reliability.h
-	common/src/reliability.cpp
-	common/include/common/log.h
-	common/src/log.cpp
+add_library (netcommon STATIC
+	netcommon/include/netcommon/socket.h
+	netcommon/src/socket.cpp
+	netcommon/include/netcommon/time.h
+	netcommon/src/time.cpp
+	netcommon/include/netcommon/reliability.h
+	netcommon/src/reliability.cpp
+	netcommon/include/netcommon/log.h
+	netcommon/src/log.cpp
 )
 
-target_include_directories (common PRIVATE src include)
+target_include_directories (netcommon PRIVATE src include)
 
-target_include_directories (common PUBLIC 
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/common/include>
-	$<INSTALL_INTERFACE:common/include>
+target_include_directories (netcommon PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/netcommon/include>
+	$<INSTALL_INTERFACE:netcommon/include>
 )
 
 #
 # server library
 #
 
-add_executable (server
-	server/src/main.cpp
-	server/src/server.h
-	server/src/server.cpp
+add_library(netserver STATIC
+	netserver/src/server.h
+	netserver/src/server.cpp
+	netserver/include/netserver/netserver.h
+	netserver/src/netserver.cpp
 )
 
-target_link_libraries(server PRIVATE common)
+target_link_libraries(netserver PRIVATE netcommon)
+
+target_include_directories (netserver PRIVATE src include)
+
+target_include_directories (netserver PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/netserver/include>
+	$<INSTALL_INTERFACE:netserver/include>
+)
 
 #
 # client library
+#
+
+add_library(netclient STATIC
+	netclient/src/client.h
+	netclient/src/client.cpp
+	netclient/include/netclient/netclient.h
+	netclient/src/netclient.cpp
+)
+
+target_link_libraries(netclient PRIVATE netcommon)
+
+target_include_directories (netclient PRIVATE src include)
+
+target_include_directories (netclient PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/netclient/include>
+	$<INSTALL_INTERFACE:netclient/include>
+)
+
+#
+# server executable
+#
+
+add_executable (server
+	server/src/main.cpp
+)
+
+target_link_libraries(server PRIVATE netserver)
+
+#
+# client executable
 #
 
 find_package(glfw3)
@@ -65,8 +103,6 @@ add_executable (client
 	client/src/imgui_impl_opengl2.h
 	client/src/imgui_impl_osx.h
 	client/src/imgui_impl_osx.mm
-	client/src/client.h
-	client/src/client.cpp
 )
 
-target_link_libraries(client PRIVATE common imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)
+target_link_libraries(client PRIVATE netclient imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)

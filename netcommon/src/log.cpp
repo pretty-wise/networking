@@ -1,5 +1,5 @@
-#include "common/log.h"
-#include "common/time.h"
+#include "netcommon/log.h"
+#include "netcommon/time.h"
 #include <stdio.h>
 #include <string.h>
 

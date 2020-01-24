@@ -1,8 +1,8 @@
 #include "server.h"
-#include "common/log.h"
-#include "common/packet.h"
-#include "common/socket.h"
-#include "common/time.h"
+#include "netcommon/log.h"
+#include "netcommon/packet.h"
+#include "netcommon/socket.h"
+#include "netcommon/time.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -29,6 +29,8 @@ Server::Server(uint16_t &port, uint16_t num_endpoints)
     return;
   }
   LOG_TRANSPORT_INF("server listening on port %d.", port);
+
+  Reliability::Test();
 }
 
 Server::~Server() {

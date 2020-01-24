@@ -1,6 +1,6 @@
 #pragma once
-#include "common/reliability.h"
-#include "common/socket.h"
+#include "netcommon/reliability.h"
+#include "netcommon/socket.h"
 #include <cstdint>
 
 class Client {

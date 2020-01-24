@@ -1,6 +1,6 @@
 #pragma once
-#include "common/packet.h"
-#include "common/time.h"
+#include "netcommon/packet.h"
+#include "netcommon/time.h"
 #include <cstdint>
 #include <string.h>
 
