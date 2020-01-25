@@ -23,11 +23,7 @@ recv:
 4. decode 32 acks and notify the application about not already acked packets.
 */
 
-Reliability::Reliability()
-    : m_local_head(kStartSequenceId), m_remote_head(kStartSequenceId - 1) {
-  memset(m_sent_packets, -1, kLogSize * sizeof(sequencelog_t));
-  memset(m_recv_packets, -1, kLogSize * sizeof(sequencelog_t));
-}
+Reliability::Reliability() { Reset(); }
 
 sequence_t Reliability::GenerateNewSequenceId(sequence_t *ack,
                                               sequence_bitmask_t *ack_bitmask) {
@@ -90,6 +86,9 @@ bool Reliability::OnReceived(sequence_t sequence, sequence_t ack,
     // todo(kstasik): store transmission info
   }
 
+  m_last_acked = ack;
+  m_last_acked_bitmask = ack_bitmask;
+
   for(sequence_t i = 0; i < 32; ++i) {
     if((ack_bitmask & 1) != 0) {
       sequence_t id = ack - i;
@@ -106,6 +105,15 @@ bool Reliability::OnReceived(sequence_t sequence, sequence_t ack,
 
   // out of order and duplicate packets will be processed.
   return true;
+}
+
+void Reliability::Reset() {
+  m_local_head = kStartSequenceId;
+  m_remote_head = kStartSequenceId - 1;
+  m_last_acked = kStartSequenceId - 1;
+  m_last_acked_bitmask = 0;
+  memset(m_sent_packets, -1, kLogSize * sizeof(sequencelog_t));
+  memset(m_recv_packets, -1, kLogSize * sizeof(sequencelog_t));
 }
 
 Reliability::OutboundPacketInfo *

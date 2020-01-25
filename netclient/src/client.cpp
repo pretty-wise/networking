@@ -10,9 +10,11 @@ static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
 static void ack_func(sequence_t ack) {}
 static void nack_func(sequence_t ack) {}
 
-Client::Client(const char *server_address, uint16_t server_port)
+Client::Client(const char *server_address, uint16_t server_port,
+               uint32_t timeout, state_callback_t state_cb, void *user_data)
     : m_state(State::Disconnected), m_last_recv_time(0), m_last_send_time(0),
-      m_timeout(5000), m_socket(0) {
+      m_timeout(timeout), m_socket(0), m_state_cb(state_cb),
+      m_user_data(user_data) {
 
   uint16_t src_port = 0;
   m_socket = open_socket(&src_port);
@@ -89,13 +91,13 @@ void Client::Update() {
         } else {
           m_server_salt = packet->m_server_salt;
           LOG_TRANSPORT_DBG("received: PacketType::Response");
-          m_state = State::Connecting;
+          SetState(State::Connecting);
         }
       } else if(header->m_type == PacketType::Payload &&
                 (m_state == State::Connecting || m_state == State::Connected)) {
         auto *packet = (PayloadPacket *)buffer;
         if(m_state == State::Connecting) {
-          m_state = State::Connected;
+          SetState(State::Connected);
           LOG_TRANSPORT_INF("connected");
         }
         if(m_reliability.OnReceived(
@@ -118,7 +120,8 @@ void Client::Update() {
     LOG_TRANSPORT_INF("connection timed out");
     close_socket(m_socket);
     m_socket = 0;
-    m_state = State::Disconnected;
+    SetState(State::Disconnected);
+    m_reliability.Reset();
   }
 }
 
@@ -127,7 +130,7 @@ bool Client::Connect(const char *server_address, uint16_t server_port) {
     return false;
   }
 
-  m_state = State::Discovering;
+  SetState(State::Discovering);
   m_client_salt = (int16_t)get_time_ms();
 
   // reset values to prevent instant timeout
@@ -144,7 +147,8 @@ void Client::Disconnect() {
   char buffer[nbytes];
   int error = 0;
 
-  m_state = State::Disconnected;
+  SetState(State::Disconnected);
+  m_reliability.Reset();
 
   auto *header = (ConnectionDisconnectPacket *)buffer;
   header->m_protocol_id = game_protocol_id;
@@ -170,3 +174,20 @@ void Client::Disconnect() {
 bool Client::IsConnected() const { return m_state == State::Connected; }
 
 bool Client::IsDisconnected() const { return m_state == State::Disconnected; }
+
+bool Client::GetTransportInfo(nc_transport_info &info) {
+  if(!IsConnected()) {
+    return false;
+  }
+  info.last_received = m_reliability.GetLastRecvId();
+  info.last_sent = m_reliability.GetLastSendId();
+  info.last_acked = m_reliability.GetLastAckedId();
+  info.last_acked_bitmask = m_reliability.GetLastAckedIdBitmask();
+  return true;
+}
+
+void Client::SetState(State s) {
+  if(m_state_cb)
+    m_state_cb((int)s, m_user_data);
+  m_state = s;
+}

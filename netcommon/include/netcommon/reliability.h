@@ -41,7 +41,16 @@ public:
                   size_t nbytes, read_packet read_func, on_ack ack_func,
                   on_nack nack_func);
 
+  void Reset();
+
   static void Test();
+
+  sequence_t GetLastSendId() const { return m_local_head - 1; }
+  sequence_t GetLastRecvId() const { return m_remote_head; }
+  sequence_t GetLastAckedId() const { return m_last_acked; }
+  sequence_bitmask_t GetLastAckedIdBitmask() const {
+    return m_last_acked_bitmask;
+  }
 
 private:
   typedef uint32_t sequencelog_t;
@@ -55,6 +64,9 @@ private:
 
   sequence_t m_local_head;  // next id to be sent
   sequence_t m_remote_head; // last received id
+
+  sequence_t m_last_acked;
+  sequence_t m_last_acked_bitmask;
 
   static const uint32_t kLogSize = 256;
   sequencelog_t m_sent_packets[kLogSize];

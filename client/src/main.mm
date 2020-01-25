@@ -37,6 +37,18 @@
     [self setNeedsDisplay:YES];
 }
 
+struct stateInfo {
+    int32_t state;
+};
+
+static stateInfo netClientState;
+
+static void state_update(int32_t state, void* user_data)
+{
+    stateInfo* info = (stateInfo*)user_data;
+    info->state = state;
+}
+
 -(void)prepareOpenGL
 {
     [super prepareOpenGL];
@@ -48,12 +60,20 @@
         NSLog(@"Error: Cannot set swap interval.");
 #endif
 
-    netClient = netclient_create("127.0.0.1", serverPort);
+    nc_config config;
+    netclient_make_default(&config);
+    config.server_address = "127.0.0.1";
+    config.server_port = serverPort;
+    config.state_callback = state_update;
+    config.user_data = &netClientState;
+    netClient = netclient_create(&config);
 }
 
 -(void)updateAndDrawDemoView
 {
-    netclient_update(netClient);
+    if(netClient) {
+        netclient_update(netClient);
+    }
 
     // Start the Dear ImGui frame
 	ImGui_ImplOpenGL2_NewFrame();
@@ -61,46 +81,56 @@
     ImGui::NewFrame();
 
     // Global data for the demo
-    static bool show_demo_window = true;
+    static bool show_demo_window = false;
     static bool show_another_window = false;
     static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-    if (show_demo_window)
-        ImGui::ShowDemoWindow(&show_demo_window);
+    static char g_hostname[128];
+    strcpy(g_hostname, "127.0.0.1");
+    static int g_port = serverPort;
 
-    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-    {
-        static float f = 0.0f;
-        static int counter = 0;
 
-        ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+    bool running = netClient != nullptr;
+    ImGui::Begin("Net Client");
+    ImGui::InputText("Host", g_hostname, IM_ARRAYSIZE(g_hostname));
+    ImGui::InputInt("Port", &g_port, 0, 9000);
+    ImGui::Text("Status: %s", running ? "Running" : "Stopped");
+    ImGui::Text("State: %d", netClientState.state);
 
-        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-        ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-        ImGui::Checkbox("Another Window", &show_another_window);
-
-        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-        if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-            counter++;
-        ImGui::SameLine();
-        ImGui::Text("counter = %d", counter);
-
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        ImGui::End();
+    if(ImGui::Button(netClient ? "Stop" : "Start")){
+        if(netClient) {
+            netclient_destroy(netClient);
+            netClient = nullptr;
+        } else {
+            nc_config config;
+            netclient_make_default(&config);
+            config.state_callback = state_update;
+            config.user_data = &netClientState;
+            config.server_address = g_hostname;
+            config.server_port = g_port;
+            netClient = netclient_create(&config);
+        }
     }
 
-    // 3. Show another simple window.
-    if (show_another_window)
-    {
-        ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-        ImGui::Text("Hello from another window!");
-        if (ImGui::Button("Close Me"))
-            show_another_window = false;
-        ImGui::End();
+    if(netClient && running) {
+        nc_transport_info info;
+        bool isConnected = 0 == netclient_transport_info(netClient, &info);
+
+        if(isConnected && ImGui::Button("Disconnect")) {
+            netclient_disconnect(netClient);
+        }
+        if(!isConnected && ImGui::Button("Connect")) {
+            netclient_connect(netClient, g_hostname, g_port);
+        }
+        
+        if(isConnected) {
+            ImGui::Text("Last Recv: %d", info.last_received);
+            ImGui::Text("Last Sent: %d", info.last_sent);
+            ImGui::Text("Last Ackd: %d", info.last_acked);
+            ImGui::Text("Last Ackd Bitmask: %d", info.last_acked_bitmask);
+        }
     }
+    ImGui::End();
 
 	// Rendering
 	ImGui::Render();
@@ -151,7 +181,9 @@
 -(void)dealloc
 {
     animationTimer = nil;
-    netclient_destroy(netClient);
+    if(netClient) {
+        netclient_destroy(netClient);
+    }
 }
 
 // Forward Mouse/Keyboard events to dear imgui OSX back-end. It returns true when imgui is expecting to use the event.
