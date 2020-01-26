@@ -6,6 +6,7 @@
 #include "imgui_impl_opengl2.h"
 #include "netclient/netclient.h"
 #include <stdio.h>
+#include <string>
 #import <Cocoa/Cocoa.h>
 #import <OpenGL/gl.h>
 #import <OpenGL/glu.h>
@@ -38,7 +39,10 @@
 }
 
 struct stateInfo {
-    int32_t state;
+    int32_t state = 0;
+    int16_t last_acked = 0;
+    int16_t last_nacked = 0;
+    std::string acks;
 };
 
 static stateInfo netClientState;
@@ -47,6 +51,34 @@ static void state_update(int32_t state, void* user_data)
 {
     stateInfo* info = (stateInfo*)user_data;
     info->state = state;
+    info->acks.clear();
+}
+
+static void packet_cb(uint16_t id, int32_t res, void* user_data)
+{
+    char buff[128];
+    sprintf(buff, "%c%d", res == 0 ? ' ' : '~', id);
+
+    stateInfo* info = (stateInfo*)user_data;
+    if(res == 0) {
+        info->last_acked = id;
+    } else {
+        info->last_nacked = id;
+    }
+
+    info->acks += buff;
+    size_t limit = 150;
+    if(info->acks.size() > limit) {
+        info->acks = info->acks.substr(info->acks.size() - limit);
+    }
+}
+
+static int send_cb(uint16_t id, void* buffer, uint32_t nbytes) {
+    return 0;
+} 
+
+static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
+    return 0;
 }
 
 -(void)prepareOpenGL
@@ -65,6 +97,9 @@ static void state_update(int32_t state, void* user_data)
     config.server_address = "127.0.0.1";
     config.server_port = serverPort;
     config.state_callback = state_update;
+    config.packet_callback = packet_cb;
+    config.send_callback = send_cb;
+    config.recv_callback = recv_cb;
     config.user_data = &netClientState;
     netClient = netclient_create(&config);
 }
@@ -96,6 +131,9 @@ static void state_update(int32_t state, void* user_data)
     ImGui::InputInt("Port", &g_port, 0, 9000);
     ImGui::Text("Status: %s", running ? "Running" : "Stopped");
     ImGui::Text("State: %d", netClientState.state);
+    ImGui::Text("Last Acked: %d", netClientState.last_acked);
+    ImGui::Text("Last Nacked: %d", netClientState.last_nacked);
+    ImGui::Text("Ack Log: %s", netClientState.acks.c_str());
 
     if(ImGui::Button(netClient ? "Stop" : "Start")){
         if(netClient) {
@@ -105,6 +143,9 @@ static void state_update(int32_t state, void* user_data)
             nc_config config;
             netclient_make_default(&config);
             config.state_callback = state_update;
+            config.packet_callback = packet_cb;
+            config.send_callback = send_cb;
+            config.recv_callback = recv_cb;
             config.user_data = &netClientState;
             config.server_address = g_hostname;
             config.server_port = g_port;
@@ -122,7 +163,7 @@ static void state_update(int32_t state, void* user_data)
         if(!isConnected && ImGui::Button("Connect")) {
             netclient_connect(netClient, g_hostname, g_port);
         }
-        
+
         if(isConnected) {
             ImGui::Text("Last Recv: %d", info.last_received);
             ImGui::Text("Last Sent: %d", info.last_sent);

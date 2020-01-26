@@ -3,19 +3,14 @@
 #include "netcommon/packet.h"
 #include <cstdio>
 
-// todo(kstasik): expose those to application
-static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
-  return 1;
-}
-static void ack_func(sequence_t ack) {}
-static void nack_func(sequence_t ack) {}
-
 Client::Client(const char *server_address, uint16_t server_port,
-               uint32_t timeout, state_callback_t state_cb, void *user_data)
+               uint32_t timeout, state_callback_t state_cb,
+               packet_callback_t packet_cb, send_callback_t send_cb,
+               recv_callback_t recv_cb, void *user_data)
     : m_state(State::Disconnected), m_last_recv_time(0), m_last_send_time(0),
       m_timeout(timeout), m_socket(0), m_state_cb(state_cb),
+      m_packet_cb(packet_cb), m_send_cb(send_cb), m_recv_cb(recv_cb),
       m_user_data(user_data) {
-
   uint16_t src_port = 0;
   m_socket = open_socket(&src_port);
   if(-1 == m_socket) {
@@ -53,7 +48,8 @@ void Client::Update() {
     header->m_type = PacketType::Payload;
     header->m_sequence = m_reliability.GenerateNewSequenceId(
         &header->m_ack, &header->m_ack_bitmask);
-    // todo(kstasik): add payload
+    m_send_cb(header->m_sequence, buffer + sizeof(PayloadPacket),
+              nbytes - sizeof(PayloadPacket));
   }
 
   size_t sent =
@@ -80,8 +76,6 @@ void Client::Update() {
         continue;
       }
 
-      m_last_recv_time = get_time_ms();
-
       if(header->m_type == PacketType::Response &&
          m_state == State::Discovering) {
         auto *packet = (ConnectionResponsePacket *)buffer;
@@ -92,6 +86,7 @@ void Client::Update() {
           m_server_salt = packet->m_server_salt;
           LOG_TRANSPORT_DBG("received: PacketType::Response");
           SetState(State::Connecting);
+          m_last_recv_time = get_time_ms();
         }
       } else if(header->m_type == PacketType::Payload &&
                 (m_state == State::Connecting || m_state == State::Connected)) {
@@ -100,15 +95,24 @@ void Client::Update() {
           SetState(State::Connected);
           LOG_TRANSPORT_INF("connected");
         }
-        if(m_reliability.OnReceived(
-               packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
-               buffer + sizeof(PayloadPacket), nbytes - sizeof(PayloadPacket),
-               read_func, ack_func, nack_func)) {
-          // dispatch
-          LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
-                            packet->m_sequence, packet->m_ack);
+        if(m_reliability.IsStale(packet->m_sequence)) {
+          LOG_TRANSPORT_WAR("stale packet %d", packet->m_sequence);
         } else {
-          LOG_TRANSPORT_DBG("received: PacketType::Payload. read error");
+          int result =
+              m_recv_cb(packet->m_sequence, buffer + sizeof(PayloadPacket),
+                        nbytes - sizeof(PayloadPacket));
+          if(result != 0) {
+            LOG_TRANSPORT_WAR("received: PacketType::Payload. read error %d",
+                              packet->m_sequence);
+          } else {
+            m_reliability.Ack(packet->m_sequence, packet->m_ack,
+                              packet->m_ack_bitmask, m_packet_cb, m_user_data);
+
+            m_last_recv_time = get_time_ms();
+
+            LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
+                              packet->m_sequence, packet->m_ack);
+          }
         }
       }
     }
@@ -118,8 +122,6 @@ void Client::Update() {
   uint32_t time_since_last_msg = get_time_ms() - m_last_recv_time;
   if(m_state != State::Disconnected && time_since_last_msg > m_timeout) {
     LOG_TRANSPORT_INF("connection timed out");
-    close_socket(m_socket);
-    m_socket = 0;
     SetState(State::Disconnected);
     m_reliability.Reset();
   }
@@ -187,6 +189,11 @@ bool Client::GetTransportInfo(nc_transport_info &info) {
 }
 
 void Client::SetState(State s) {
+  static_assert(NETCLIENT_STATE_DISCONNECTED == (int)State::Disconnected, "");
+  static_assert(NETCLIENT_STATE_DISCOVERING == (int)State::Discovering, "");
+  static_assert(NETCLIENT_STATE_CONNECTING == (int)State::Connecting, "");
+  static_assert(NETCLIENT_STATE_CONNECTED == (int)State::Connected, "");
+
   if(m_state_cb)
     m_state_cb((int)s, m_user_data);
   m_state = s;

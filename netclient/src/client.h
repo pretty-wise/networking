@@ -7,8 +7,15 @@
 class Client {
 public:
   typedef void (*state_callback_t)(int32_t, void *);
+  typedef void (*packet_callback_t)(sequence_t, int32_t type, void *);
+  typedef int (*send_callback_t)(uint16_t id, void *buffer, uint32_t nbytes);
+  typedef int (*recv_callback_t)(uint16_t id, const void *buffer,
+                                 uint32_t nbytes);
+
   Client(const char *server_address, uint16_t server_port, uint32_t timeout,
-         state_callback_t state_callback, void *user_data);
+         state_callback_t state_callback, packet_callback_t packet_callback,
+         send_callback_t send_callback, recv_callback_t recv_callback,
+         void *user_data);
   ~Client();
   void Update();
 
@@ -38,5 +45,8 @@ private:
   Reliability m_reliability;
 
   state_callback_t m_state_cb;
+  packet_callback_t m_packet_cb;
+  send_callback_t m_send_cb;
+  recv_callback_t m_recv_cb;
   void *m_user_data;
 };

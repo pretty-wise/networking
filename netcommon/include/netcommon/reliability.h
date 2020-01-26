@@ -4,10 +4,9 @@
 #include <cstdint>
 #include <string.h>
 
-typedef void (*on_ack)(sequence_t);
-typedef void (*on_nack)(sequence_t);
-typedef int (*read_packet)(sequence_t, const void *buffer, size_t nbytes);
-typedef int (*write_packet)(sequence_t, void *buffer, size_t nbytes);
+typedef void (*on_ack)(sequence_t, int32_t, void *);
+typedef int (*read_packet)(sequence_t, const void *buffer, uint32_t nbytes);
+typedef int (*write_packet)(sequence_t, void *buffer, uint32_t nbytes);
 
 class Reliability {
 public:
@@ -36,11 +35,10 @@ public:
   // clean inbound info (m_recv_packets) of potentially lost packets between
   // <m_remote_head + 1, sequence)
   // dispatch acks if not already dispatched.
-  bool OnReceived(sequence_t sequence, sequence_t ack,
-                  sequence_bitmask_t ack_bitmask, const void *buffer,
-                  size_t nbytes, read_packet read_func, on_ack ack_func,
-                  on_nack nack_func);
 
+  bool IsStale(sequence_t sequence);
+  void Ack(sequence_t sequence, sequence_t ack, sequence_bitmask_t ack_bitmask,
+           on_ack ack_func, void *user_data);
   void Reset();
 
   static void Test();

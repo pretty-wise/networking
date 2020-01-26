@@ -14,10 +14,10 @@ inline bool IsLessRecent(sequence_t a, sequence_t b) {
   return IsMoreRecent(b, a);
 }
 
-inline sequence_t Distance(sequence_t a, sequence_t b) {
-  // return a - b;
-  return (a >= b) ? a - b
-                  : (std::numeric_limits<sequence_t>::max() - b) + a + 1;
+inline size_t Distance(sequence_t a, sequence_t b) {
+  // return b - a;
+  return (b >= a) ? b - a
+                  : (std::numeric_limits<sequence_t>::max() - a) + b + 1;
 }
 
 enum class PacketType : uint8_t {

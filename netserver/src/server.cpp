@@ -10,11 +10,10 @@
 #include <unistd.h>
 
 // todo(kstasik): expose those to application
-static int read_func(sequence_t id, const void *buffer, size_t nbytes) {
-  return 1;
+static int read_func(sequence_t id, const void *buffer, uint32_t nbytes) {
+  return 0;
 }
-static void ack_func(sequence_t ack) {}
-static void nack_func(sequence_t ack) {}
+static void ack_func(sequence_t ack, int32_t, void *) {}
 
 Server::Server(uint16_t &port, uint16_t num_endpoints)
     : m_endpoint_capacity(num_endpoints), m_endpoint_count(0), m_timeout(5000) {
@@ -80,7 +79,6 @@ void Server::Update() {
       }
 
       Endpoint &e = m_endpoints[endpoint_index];
-      e.m_last_recv_time = get_time_ms();
 
       if(header->m_type == PacketType::Establish &&
          e.m_state == Endpoint::State::Connecting) {
@@ -88,6 +86,7 @@ void Server::Update() {
         LOG_TRANSPORT_DBG("received: PacketType::Establish");
         if(packet->m_key == (e.m_client_salt ^ e.m_server_salt)) {
           e.m_state = Endpoint::State::Connected;
+          e.m_last_recv_time = get_time_ms();
           LOG_TRANSPORT_INF("client connected");
         }
       } else if(header->m_type == PacketType::Disconnect) {
@@ -96,13 +95,23 @@ void Server::Update() {
       } else if(header->m_type == PacketType::Payload &&
                 e.m_state == Endpoint::State::Connected) {
         auto *packet = (PayloadPacket *)buffer;
-        if(e.m_reliability.OnReceived(
-               packet->m_sequence, packet->m_ack, packet->m_ack_bitmask,
-               buffer + sizeof(PayloadPacket), nbytes - sizeof(PayloadPacket),
-               read_func, ack_func, nack_func)) {
-          // dispatch
-          LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
-                            packet->m_sequence, packet->m_ack);
+        if(e.m_reliability.IsStale(packet->m_sequence)) {
+          LOG_TRANSPORT_WAR("received stale packet %d", packet->m_sequence);
+        } else {
+          int result =
+              read_func(packet->m_sequence, buffer + sizeof(PayloadPacket),
+                        nbytes - sizeof(PayloadPacket));
+          if(result != 0) {
+            LOG_TRANSPORT_WAR("failed to read: %d", packet->m_sequence);
+          } else {
+            e.m_reliability.Ack(packet->m_sequence, packet->m_ack,
+                                packet->m_ack_bitmask, ack_func, nullptr);
+
+            e.m_last_recv_time = get_time_ms();
+
+            LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
+                              packet->m_sequence, packet->m_ack);
+          }
         }
       }
     }

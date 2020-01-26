@@ -5,14 +5,23 @@ void netclient_make_default(nc_config *config) {
   config->timeout = 5000;
   config->state_callback = nullptr;
   config->user_data = nullptr;
+  config->packet_callback = nullptr;
+  config->send_callback = nullptr;
+  config->recv_callback = nullptr;
 }
 
 void *netclient_create(const nc_config *config) {
   if(!config)
     return nullptr;
-  Client *client =
-      new Client(config->server_address, config->server_port, config->timeout,
-                 config->state_callback, config->user_data);
+
+  if(!config->send_callback || !config->recv_callback) {
+    return nullptr;
+  }
+
+  Client *client = new Client(config->server_address, config->server_port,
+                              config->timeout, config->state_callback,
+                              config->packet_callback, config->send_callback,
+                              config->recv_callback, config->user_data);
   return client;
 }
 
