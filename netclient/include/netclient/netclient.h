@@ -11,6 +11,8 @@
 
 extern "C" {
 
+struct nc_client;
+
 struct nc_config {
   const char *server_address;
   uint16_t server_port;
@@ -25,15 +27,15 @@ struct nc_config {
 
 void netclient_make_default(nc_config *config);
 
-void *netclient_create(const nc_config *config);
+nc_client *netclient_create(const nc_config *config);
 
-int netclient_disconnect(void *context);
+int netclient_disconnect(nc_client *context);
 
-int netclient_connect(void *context, const char *addr, uint16_t port);
+int netclient_connect(nc_client *context, const char *addr, uint16_t port);
 
-void netclient_destroy(void *context);
+void netclient_destroy(nc_client *context);
 
-void netclient_update(void *context);
+void netclient_update(nc_client *context);
 
 struct nc_transport_info {
   int32_t last_sent;
@@ -42,5 +44,5 @@ struct nc_transport_info {
   int32_t last_acked_bitmask;
 };
 
-int netclient_transport_info(void *context, nc_transport_info *info);
+int netclient_transport_info(nc_client *context, nc_transport_info *info);
 }

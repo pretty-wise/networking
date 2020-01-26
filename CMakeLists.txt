@@ -64,8 +64,6 @@ target_include_directories (netserver PUBLIC
 #
 
 add_library(netclient STATIC
-	netclient/src/client.h
-	netclient/src/client.cpp
 	netclient/include/netclient/netclient.h
 	netclient/src/netclient.cpp
 )

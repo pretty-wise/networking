@@ -17,7 +17,7 @@
 
 @interface ImGuiExampleView : NSOpenGLView
 {
-    void* netClient;
+    struct nc_client* netClient;
     NSTimer* animationTimer;
     int serverPort;
 }
