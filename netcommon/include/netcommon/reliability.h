@@ -1,4 +1,5 @@
 #pragma once
+#include "netcommon/circularbuffer.h"
 #include "netcommon/packet.h"
 #include "netcommon/time.h"
 #include <cstdint>
@@ -72,4 +73,9 @@ private:
 
   sequencelog_t m_recv_packets[kLogSize];
   InboundPacketInfo m_recv_data[kLogSize];
+
+public:
+  CircularBuffer<float> m_rtt_log;
+  CircularBuffer<float> m_smoothed_rtt_log;
+  float m_rtt;
 };

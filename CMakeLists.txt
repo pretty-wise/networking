@@ -30,6 +30,8 @@ add_library (netcommon STATIC
 	netcommon/src/reliability.cpp
 	netcommon/include/netcommon/log.h
 	netcommon/src/log.cpp
+	netcommon/include/netcommon/circularbuffer.h
+	netcommon/src/circularbuffer.cpp
 )
 
 target_include_directories (netcommon PRIVATE src include)

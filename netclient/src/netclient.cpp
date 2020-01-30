@@ -266,5 +266,8 @@ int netclient_transport_info(nc_client *context, nc_transport_info *info) {
   info->last_sent = context->m_reliability.GetLastSendId();
   info->last_acked = context->m_reliability.GetLastAckedId();
   info->last_acked_bitmask = context->m_reliability.GetLastAckedIdBitmask();
+  info->rtt = context->m_reliability.m_rtt_log.Begin();
+  info->smoothed_rtt = context->m_reliability.m_smoothed_rtt_log.Begin();
+  info->rtt_size = context->m_reliability.m_rtt_log.Size();
   return 0;
 }

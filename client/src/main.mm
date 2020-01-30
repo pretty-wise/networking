@@ -135,6 +135,7 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
     ImGui::Text("Last Nacked: %d", netClientState.last_nacked);
     ImGui::Text("Ack Log: %s", netClientState.acks.c_str());
 
+
     if(ImGui::Button(netClient ? "Stop" : "Start")){
         if(netClient) {
             netclient_destroy(netClient);
@@ -169,6 +170,9 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
             ImGui::Text("Last Sent: %d", info.last_sent);
             ImGui::Text("Last Ackd: %d", info.last_acked);
             ImGui::Text("Last Ackd Bitmask: %d", info.last_acked_bitmask);
+
+            ImGui::PlotLines("RTT", info.rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
+            ImGui::PlotLines("Smoothed RTT", info.smoothed_rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
         }
     }
     ImGui::End();

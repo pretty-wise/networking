@@ -182,8 +182,8 @@ uint32_t Server::AddEndpoint(const sockaddr_storage &address,
       e.m_address = address;
       e.m_state = Endpoint::State::Connecting;
       e.m_client_salt = client_salt;
-      e.m_server_salt = m_socket; // todo(kstasik): generate it better
       e.m_last_recv_time = get_time_ms();
+      e.m_server_salt = e.m_last_recv_time; // todo(kstasik): generate it better
       ++m_endpoint_count;
       return i;
     }
@@ -192,6 +192,14 @@ uint32_t Server::AddEndpoint(const sockaddr_storage &address,
 }
 void Server::RemoveEndpoint(uint32_t index) {
   Endpoint &e = m_endpoints[index];
-  e = {};
+
+  e.m_address = {};
+  e.m_state = Endpoint::State::Undefined;
+  e.m_client_salt = 0;
+  e.m_server_salt = 0;
+  e.m_last_recv_time = 0;
+  e.m_last_send_time = 0;
+  e.m_reliability.Reset();
+
   --m_endpoint_count;
 }

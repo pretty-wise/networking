@@ -23,7 +23,10 @@ recv:
 4. decode 32 acks and notify the application about not already acked packets.
 */
 
-Reliability::Reliability() { Reset(); }
+Reliability::Reliability()
+    : m_rtt_log(200), m_smoothed_rtt_log(200), m_rtt(30.f) {
+  Reset();
+}
 
 sequence_t Reliability::GenerateNewSequenceId(sequence_t *ack,
                                               sequence_bitmask_t *ack_bitmask) {
@@ -102,6 +105,9 @@ void Reliability::Ack(sequence_t sequence, sequence_t ack,
         sentInfo->m_acked = true;
         uint32_t rtt = get_time_ms() - sentInfo->m_send_time;
         // todo(kstasik): use rtt
+        m_rtt += ((float)rtt - m_rtt) * 0.025f;
+        m_rtt_log.PushBack((float)rtt);
+        m_smoothed_rtt_log.PushBack(m_rtt);
         if(ack_func)
           ack_func(id, 0, user_data);
       } else {
@@ -120,6 +126,11 @@ void Reliability::Reset() {
   m_last_acked_bitmask = 0;
   memset(m_sent_packets, -1, kLogSize * sizeof(sequencelog_t));
   memset(m_recv_packets, -1, kLogSize * sizeof(sequencelog_t));
+
+  m_rtt_log.Clear();
+  m_smoothed_rtt_log.Clear();
+  m_rtt_log.Resize(m_rtt_log.Capacity());
+  m_smoothed_rtt_log.Resize(m_smoothed_rtt_log.Capacity());
 }
 
 Reliability::OutboundPacketInfo *
