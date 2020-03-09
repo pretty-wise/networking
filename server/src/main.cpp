@@ -38,6 +38,12 @@ void term_handler(int signal) { g_running = false; }
 
 struct ns_server *g_server = nullptr;
 
+static void packet_func(uint16_t id, void *user_data) {}
+
+static int send_func(uint16_t id, void *buffer, uint32_t nbytes) { return 0; }
+
+int recv_func(uint16_t id, const void *buffer, uint32_t nbytes) { return 0; }
+
 int main(int argc, char *argv[]) {
   if(SIG_ERR == signal(SIGINT, term_handler)) {
     return -1;
@@ -52,7 +58,15 @@ int main(int argc, char *argv[]) {
     port = atoi((const char *)argv[1]);
   }
 
-  g_server = netserver_create(&port, 16, nullptr);
+  ns_config config;
+  config.port = port;
+  config.num_endpoints = 16;
+  config.packet_callback = packet_func;
+  config.send_callback = send_func;
+  config.recv_callback = recv_func;
+  config.user_data = nullptr;
+
+  g_server = netserver_create(&config);
 
   while(g_running) {
     uint64_t frame_start_time = get_time_us();

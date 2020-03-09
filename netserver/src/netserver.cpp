@@ -40,6 +40,11 @@ struct ns_server {
 
   sockaddr_storage m_local;
   int m_socket;
+
+  void (*m_packet_callback)(uint16_t id, void *user_data);
+  int (*m_send_callback)(uint16_t id, void *buffer, uint32_t nbytes);
+  int (*m_recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes);
+  void *m_user_data;
 };
 
 static uint32_t AddEndpoint(ns_server *context, const sockaddr_storage &address,
@@ -86,30 +91,36 @@ static uint32_t FindEndpoint(ns_server *context,
   return -1;
 }
 
-struct ns_server *netserver_create(uint16_t *port, uint16_t num_endpoints,
-                                   struct netsimulator *simulator) {
-  int socket = open_socket(port);
+struct ns_server *netserver_create(ns_config *config) {
+  if(!config)
+    return nullptr;
+
+  int socket = open_socket(&config->port);
   if(socket == -1) {
     LOG_TRANSPORT_ERR("startup error");
     return nullptr;
   }
 
-  LOG_TRANSPORT_INF("server listening on port %d.", *port);
+  LOG_TRANSPORT_INF("server listening on port %d.", config->port);
 
   ns_server *server = new ns_server;
-  server->m_endpoint_capacity = num_endpoints;
+  server->m_endpoint_capacity = config->num_endpoints;
   server->m_endpoint_count = 0;
   server->m_timeout = 5000;
-  server->m_simulator = simulator;
+  server->m_simulator = config->simulator;
   server->m_socket = socket;
+  server->m_packet_callback = config->packet_callback;
+  server->m_send_callback = config->send_callback;
+  server->m_recv_callback = config->recv_callback;
+  server->m_user_data = config->user_data;
 
-  server->m_endpoints = new Endpoint[num_endpoints];
-  for(auto i = 0; i < num_endpoints; ++i) {
+  server->m_endpoints = new Endpoint[server->m_endpoint_capacity];
+  for(auto i = 0; i < server->m_endpoint_capacity; ++i) {
     Endpoint &e = server->m_endpoints[i];
     e.m_state = Endpoint::State::Undefined;
   }
 
-  create_udp_addr("127.0.0.1", *port, &server->m_local);
+  create_udp_addr("127.0.0.1", config->port, &server->m_local);
 
   Reliability::Test();
   return server;
@@ -188,7 +199,12 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
         LOG_TRANSPORT_WAR("failed to read: %d", packet->m_sequence);
       } else {
         e.m_reliability.Ack(packet->m_sequence, packet->m_ack,
-                            packet->m_ack_bitmask, ack_func, nullptr);
+                            packet->m_ack_bitmask, context->m_packet_callback,
+                            context->m_user_data);
+
+        context->m_recv_callback(packet->m_sequence,
+                                 buffer + sizeof(PayloadPacket),
+                                 nbytes - sizeof(PayloadPacket));
 
         e.m_last_recv_time = get_time_ms();
 
@@ -260,7 +276,11 @@ void netserver_update(struct ns_server *context) {
       header->m_type = PacketType::Payload;
       header->m_sequence = endpoint.m_reliability.GenerateNewSequenceId(
           &header->m_ack, &header->m_ack_bitmask);
-      // todo(kstasik): add data
+
+      context->m_send_callback(header->m_sequence,
+                               buffer + sizeof(PayloadPacket),
+                               nbytes - sizeof(PayloadPacket));
+
       if(netserver_send(context, endpoint.m_address, buffer, nbytes)) {
         LOG_TRANSPORT_DBG("sent: PacketType::Payload");
       }

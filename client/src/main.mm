@@ -51,14 +51,14 @@ struct stateInfo {
 
 static stateInfo netClientState;
 
-static void state_update(int32_t state, void* user_data)
+static void cli_state_update_func(int32_t state, void* user_data)
 {
     stateInfo* info = (stateInfo*)user_data;
     info->state = state;
     info->acks.clear();
 }
 
-static void packet_cb(uint16_t id, void* user_data)
+static void cli_packet_func(uint16_t id, void* user_data)
 {
     int res = 0;
     char buff[128];
@@ -78,13 +78,26 @@ static void packet_cb(uint16_t id, void* user_data)
     }
 }
 
-static int send_cb(uint16_t id, void* buffer, uint32_t nbytes) {
+static int cli_send_func(uint16_t id, void* buffer, uint32_t nbytes) {
     return 0;
 } 
 
-static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
+static int cli_recv_func(uint16_t id, const void* buffer, uint32_t nbytes) {
     return 0;
 }
+
+static void srv_packet_func(uint16_t id, void *user_data) {
+
+}
+
+static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes) {
+    return 0;
+}
+
+static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes) {
+    return 0;
+}
+  
 
 -(void)prepareOpenGL
 {
@@ -102,20 +115,28 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
 
     netSimulator = netsimulator_create(&simconfig);
 
-    uint16_t port = serverPort;
-    netServer = netserver_create(&port, 8, netSimulator);
+    ns_config srvConfig;
+    srvConfig.port = serverPort;
+    srvConfig.num_endpoints = 16;
+    srvConfig.packet_callback = srv_packet_func;
+    srvConfig.send_callback = srv_send_func;
+    srvConfig.recv_callback = srv_recv_func;
+    srvConfig.user_data = nullptr;
+    srvConfig.simulator = netSimulator;
 
-    nc_config config;
-    netclient_make_default(&config);
-    config.server_address = "127.0.0.1";
-    config.server_port = serverPort;
-    config.state_callback = state_update;
-    config.packet_callback = packet_cb;
-    config.send_callback = send_cb;
-    config.recv_callback = recv_cb;
-    config.user_data = &netClientState;
-    config.simulator = netSimulator;
-    netClient = netclient_create(&config);
+    netServer = netserver_create(&srvConfig);
+
+    nc_config cliConfig;
+    netclient_make_default(&cliConfig);
+    cliConfig.server_address = "127.0.0.1";
+    cliConfig.server_port = serverPort;
+    cliConfig.state_callback = cli_state_update_func;
+    cliConfig.packet_callback = cli_packet_func;
+    cliConfig.send_callback = cli_send_func;
+    cliConfig.recv_callback = cli_recv_func;
+    cliConfig.user_data = &netClientState;
+    cliConfig.simulator = netSimulator;
+    netClient = netclient_create(&cliConfig);
 }
 
 -(void)updateAndDrawDemoView
@@ -167,10 +188,10 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
             } else {
                 nc_config config;
                 netclient_make_default(&config);
-                config.state_callback = state_update;
-                config.packet_callback = packet_cb;
-                config.send_callback = send_cb;
-                config.recv_callback = recv_cb;
+                config.state_callback = cli_state_update_func;
+                config.packet_callback = cli_packet_func;
+                config.send_callback = cli_send_func;
+                config.recv_callback = cli_recv_func;
                 config.user_data = &netClientState;
                 config.server_address = g_hostname;
                 config.server_port = g_port;
