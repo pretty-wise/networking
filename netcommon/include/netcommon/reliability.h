@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string.h>
 
-typedef void (*on_ack)(sequence_t, int32_t, void *);
+typedef void (*on_ack)(sequence_t, void *);
 typedef int (*read_packet)(sequence_t, const void *buffer, uint32_t nbytes);
 typedef int (*write_packet)(sequence_t, void *buffer, uint32_t nbytes);
 

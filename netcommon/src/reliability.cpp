@@ -85,37 +85,22 @@ void Reliability::Ack(sequence_t sequence, sequence_t ack,
     // todo(kstasik): store transmission info
   }
 
-  // todo(kstasik): currently this is discarding
-  // any out-of-order acks because it is advancing
-  // m_last_acked and ignores the bitmask.
-  // this needs to be revisited: every time we receive
-  // an ack we need to check the bitmask for bits that were
-  // not acked. also it needs to only nack if bits are falling off
-  // the bitmask. currently it does nack all gaps immediately.
-  while(m_last_acked != ack) {
-    ++m_last_acked;
-    size_t distance = Distance(m_last_acked, ack);
-    if(distance >= 32) {
-      ack_func(m_last_acked, 1, user_data); // nack
-    } else {
-      bool acked = (ack_bitmask & (1 << distance)) != 0;
-      sequence_t id = m_last_acked;
-      OutboundPacketInfo *sentInfo = FindSentPacketInfo(id);
-      if(sentInfo && !sentInfo->m_acked && acked) {
+  for(int i = 0; i < 32; ++i) {
+    sequence_t seq = ack - i;
+    bool is_acked = ack_bitmask & (1 << i);
+    if(is_acked) {
+      OutboundPacketInfo *sentInfo = FindSentPacketInfo(seq);
+      if(sentInfo && !sentInfo->m_acked) {
         sentInfo->m_acked = true;
         uint32_t rtt = get_time_ms() - sentInfo->m_send_time;
-        // todo(kstasik): use rtt
         m_rtt += ((float)rtt - m_rtt) * 0.025f;
         m_rtt_log.PushBack((float)rtt);
         m_smoothed_rtt_log.PushBack(m_rtt);
-        if(ack_func)
-          ack_func(id, 0, user_data);
-      } else {
-        if(ack_func)
-          ack_func(id, 1, user_data); // nack
+        ack_func(seq, user_data); // ack
       }
     }
   }
+  m_last_acked = ack;
   m_last_acked_bitmask = ack_bitmask;
 }
 
@@ -166,7 +151,7 @@ static bool IsAcked(sequence_t id, sequence_t ack, sequence_bitmask_t bitmask) {
   return false;
 }
 
-static void test_ack_func(sequence_t id, int32_t, void *) {}
+static void test_ack_func(sequence_t id, void *) {}
 
 void Reliability::Test() {
   int loopCount = std::max<int>(2 * std::numeric_limits<sequence_t>::max(),

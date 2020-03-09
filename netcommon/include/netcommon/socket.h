@@ -14,5 +14,5 @@ void close_socket(int);
 size_t socket_receive(int handle, void *buffer, size_t nbytes,
                       struct sockaddr_storage *source, int *error);
 
-size_t socket_send(int handle, struct sockaddr_storage *destination,
+size_t socket_send(int handle, const struct sockaddr_storage *destination,
                    const void *buffer, size_t nbytes, int *error);

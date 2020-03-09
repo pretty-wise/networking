@@ -128,7 +128,7 @@ size_t socket_receive(int handle, void *buffer, size_t nbytes,
 
 void close_socket(int socket) { close(socket); }
 
-size_t socket_send(int handle, struct sockaddr_storage *destination,
+size_t socket_send(int handle, const struct sockaddr_storage *destination,
                    const void *buffer, size_t nbytes, int *error) {
   size_t sent = sendto(handle, buffer, nbytes, 0,
                        (struct sockaddr *)destination, destination->ss_len);

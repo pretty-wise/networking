@@ -36,7 +36,7 @@ static uint64_t get_time_us() {
 bool g_running = true;
 void term_handler(int signal) { g_running = false; }
 
-void *g_server = nullptr;
+struct ns_server *g_server = nullptr;
 
 int main(int argc, char *argv[]) {
   if(SIG_ERR == signal(SIGINT, term_handler)) {
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
     port = atoi((const char *)argv[1]);
   }
 
-  g_server = netserver_create(&port, 16);
+  g_server = netserver_create(&port, 16, nullptr);
 
   while(g_running) {
     uint64_t frame_start_time = get_time_us();

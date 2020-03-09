@@ -32,6 +32,8 @@ add_library (netcommon STATIC
 	netcommon/src/log.cpp
 	netcommon/include/netcommon/circularbuffer.h
 	netcommon/src/circularbuffer.cpp
+	netcommon/include/netcommon/netsimulator.h
+	netcommon/src/netsimulator.cpp
 )
 
 target_include_directories (netcommon PRIVATE src include)
@@ -46,8 +48,6 @@ target_include_directories (netcommon PUBLIC
 #
 
 add_library(netserver STATIC
-	netserver/src/server.h
-	netserver/src/server.cpp
 	netserver/include/netserver/netserver.h
 	netserver/src/netserver.cpp
 )
@@ -105,4 +105,4 @@ add_executable (client
 	client/src/imgui_impl_osx.mm
 )
 
-target_link_libraries(client PRIVATE netclient imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)
+target_link_libraries(client PRIVATE netclient netserver netcommon imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)

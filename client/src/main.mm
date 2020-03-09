@@ -5,6 +5,8 @@
 #include "imgui_impl_osx.h"
 #include "imgui_impl_opengl2.h"
 #include "netclient/netclient.h"
+#include "netserver/netserver.h"
+#include "netcommon/netsimulator.h"
 #include <stdio.h>
 #include <string>
 #import <Cocoa/Cocoa.h>
@@ -18,6 +20,8 @@
 @interface ImGuiExampleView : NSOpenGLView
 {
     struct nc_client* netClient;
+    struct netsimulator* netSimulator;
+    struct ns_server* netServer;
     NSTimer* animationTimer;
     int serverPort;
 }
@@ -54,8 +58,9 @@ static void state_update(int32_t state, void* user_data)
     info->acks.clear();
 }
 
-static void packet_cb(uint16_t id, int32_t res, void* user_data)
+static void packet_cb(uint16_t id, void* user_data)
 {
+    int res = 0;
     char buff[128];
     sprintf(buff, "%c%d", res == 0 ? ' ' : '~', id);
 
@@ -91,6 +96,14 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
     if (swapInterval == 0)
         NSLog(@"Error: Cannot set swap interval.");
 #endif
+  
+    netsimulator_config simconfig;
+    netsimulator_default_config(&simconfig);
+
+    netSimulator = netsimulator_create(&simconfig);
+
+    uint16_t port = serverPort;
+    netServer = netserver_create(&port, 8, netSimulator);
 
     nc_config config;
     netclient_make_default(&config);
@@ -101,6 +114,7 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
     config.send_callback = send_cb;
     config.recv_callback = recv_cb;
     config.user_data = &netClientState;
+    config.simulator = netSimulator;
     netClient = netclient_create(&config);
 }
 
@@ -108,6 +122,14 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
 {
     if(netClient) {
         netclient_update(netClient);
+    }
+
+    if(netServer) {
+        netserver_update(netServer);
+    }
+
+    if(netSimulator) {
+        netsimulator_update(netSimulator);
     }
 
     // Start the Dear ImGui frame
@@ -126,55 +148,74 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
 
 
     bool running = netClient != nullptr;
+
     ImGui::Begin("Net Client");
-    ImGui::InputText("Host", g_hostname, IM_ARRAYSIZE(g_hostname));
-    ImGui::InputInt("Port", &g_port, 0, 9000);
-    ImGui::Text("Status: %s", running ? "Running" : "Stopped");
-    ImGui::Text("State: %d", netClientState.state);
-    ImGui::Text("Last Acked: %d", netClientState.last_acked);
-    ImGui::Text("Last Nacked: %d", netClientState.last_nacked);
-    ImGui::Text("Ack Log: %s", netClientState.acks.c_str());
+
+    if(ImGui::CollapsingHeader("Client")) {
+        ImGui::InputText("Host", g_hostname, IM_ARRAYSIZE(g_hostname));
+        ImGui::InputInt("Port", &g_port, 0, 9000);
+        ImGui::Text("Status: %s", running ? "Running" : "Stopped");
+        ImGui::Text("State: %d", netClientState.state);
+        ImGui::Text("Last Acked: %d", netClientState.last_acked);
+        ImGui::Text("Ack Log: %s", netClientState.acks.c_str());
 
 
-    if(ImGui::Button(netClient ? "Stop" : "Start")){
-        if(netClient) {
-            netclient_destroy(netClient);
-            netClient = nullptr;
-        } else {
-            nc_config config;
-            netclient_make_default(&config);
-            config.state_callback = state_update;
-            config.packet_callback = packet_cb;
-            config.send_callback = send_cb;
-            config.recv_callback = recv_cb;
-            config.user_data = &netClientState;
-            config.server_address = g_hostname;
-            config.server_port = g_port;
-            netClient = netclient_create(&config);
+        if(ImGui::Button(netClient ? "Stop" : "Start")){
+            if(netClient) {
+                netclient_destroy(netClient);
+                netClient = nullptr;
+            } else {
+                nc_config config;
+                netclient_make_default(&config);
+                config.state_callback = state_update;
+                config.packet_callback = packet_cb;
+                config.send_callback = send_cb;
+                config.recv_callback = recv_cb;
+                config.user_data = &netClientState;
+                config.server_address = g_hostname;
+                config.server_port = g_port;
+                config.simulator = netSimulator;
+                netClient = netclient_create(&config);
+            }
+        }
+
+        if(netClient && running) {
+            nc_transport_info info;
+            bool isConnected = 0 == netclient_transport_info(netClient, &info);
+
+            if(isConnected && ImGui::Button("Disconnect")) {
+                netclient_disconnect(netClient);
+            }
+            if(!isConnected && ImGui::Button("Connect")) {
+                netclient_connect(netClient, g_hostname, g_port);
+            }
+
+            if(isConnected) {
+                ImGui::Text("Last Recv: %d", info.last_received);
+                ImGui::Text("Last Sent: %d", info.last_sent);
+                ImGui::Text("Last Ackd: %d", info.last_acked);
+                ImGui::Text("Last Ackd Bitmask: %d", info.last_acked_bitmask);
+
+                ImGui::PlotLines("RTT", info.rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
+                ImGui::PlotLines("Smoothed RTT", info.smoothed_rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
+            }
+        }
+    }
+    if(netSimulator && running) {
+        if(ImGui::CollapsingHeader("Simulator")) {
+            static netsimulator_config simconfig = { 30, 0, 0.f, 0.f };
+
+            ImGui::InputInt("Delay (ms)", (int*)&simconfig.delayMs, 0, 5000);
+            ImGui::InputInt("Jitter (ms)", (int*)&simconfig.jitterMs, 0, 5000);
+            ImGui::InputFloat("Drop (ratio)", &simconfig.dropRatio, 0.f, 1.f);
+            ImGui::InputFloat("Duplicate (ratio)", &simconfig.duplicateRatio, 0.f, 1.f);
+
+            if(ImGui::Button("Apply")) {
+                netsimulator_configure(netSimulator, &simconfig);
+            }
         }
     }
 
-    if(netClient && running) {
-        nc_transport_info info;
-        bool isConnected = 0 == netclient_transport_info(netClient, &info);
-
-        if(isConnected && ImGui::Button("Disconnect")) {
-            netclient_disconnect(netClient);
-        }
-        if(!isConnected && ImGui::Button("Connect")) {
-            netclient_connect(netClient, g_hostname, g_port);
-        }
-
-        if(isConnected) {
-            ImGui::Text("Last Recv: %d", info.last_received);
-            ImGui::Text("Last Sent: %d", info.last_sent);
-            ImGui::Text("Last Ackd: %d", info.last_acked);
-            ImGui::Text("Last Ackd Bitmask: %d", info.last_acked_bitmask);
-
-            ImGui::PlotLines("RTT", info.rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
-            ImGui::PlotLines("Smoothed RTT", info.smoothed_rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
-        }
-    }
     ImGui::End();
 
 	// Rendering
@@ -228,6 +269,13 @@ static int recv_cb(uint16_t id, const void* buffer, uint32_t nbytes) {
     animationTimer = nil;
     if(netClient) {
         netclient_destroy(netClient);
+    }
+    if(netSimulator) {
+        netsimulator_destroy(netSimulator);
+    }
+
+    if(netServer) {
+        netserver_destroy(netServer);
     }
 }
 
