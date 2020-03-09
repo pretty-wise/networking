@@ -6,12 +6,6 @@
 #include "netcommon/socket.h"
 #include "netcommon/time.h"
 
-typedef void (*state_callback_t)(int32_t, void *);
-typedef void (*packet_callback_t)(sequence_t, void *);
-typedef int (*send_callback_t)(uint16_t id, void *buffer, uint32_t nbytes);
-typedef int (*recv_callback_t)(uint16_t id, const void *buffer,
-                               uint32_t nbytes);
-
 struct nc_client {
   int m_socket;
   sockaddr_storage m_local;
@@ -27,10 +21,10 @@ struct nc_client {
 
   netsimulator *m_simulator;
 
-  state_callback_t m_state_cb;
-  packet_callback_t m_packet_cb;
-  send_callback_t m_send_cb;
-  recv_callback_t m_recv_cb;
+  void (*m_state_cb)(int32_t, void *);
+  void (*m_packet_cb)(sequence_t, void *);
+  int (*m_send_cb)(uint16_t id, void *buffer, uint32_t nbytes);
+  int (*m_recv_cb)(uint16_t id, const void *buffer, uint32_t nbytes);
   void *m_user_data;
 };
 
