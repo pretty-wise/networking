@@ -137,9 +137,14 @@ static void netclient_recv(nc_client *context, uint8_t *buffer, uint32_t nbytes,
         LOG_TRANSPORT_WAR("received: PacketType::Payload. read error %d",
                           packet->m_sequence);
       } else {
-        context->m_reliability.Ack(packet->m_sequence, packet->m_ack,
-                                   packet->m_ack_bitmask, context->m_packet_cb,
-                                   context->m_user_data);
+        sequence_bitmask_t acks = context->m_reliability.Ack(
+            packet->m_sequence, packet->m_ack, packet->m_ack_bitmask);
+
+        for(int i = 0; i < 32; ++i) {
+          if((acks & (1 << i)) != 0) {
+            context->m_packet_cb(packet->m_ack + i, context->m_user_data);
+          }
+        }
 
         context->m_last_recv_time = get_time_ms();
 

@@ -41,13 +41,12 @@ struct ns_server {
   sockaddr_storage m_local;
   int m_socket;
 
-  void (*m_state_callback)(uint32_t state, ns_endpoint *endpoint,
-                           void *user_data);
-  void (*m_packet_callback)(uint16_t id, void *user_data);
-  int (*m_send_callback)(uint16_t id, void *buffer, uint32_t nbytes,
-                         ns_endpoint *dst);
-  int (*m_recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes,
-                         ns_endpoint *src);
+  void (*m_state_cb)(uint32_t state, ns_endpoint *endpoint, void *user_data);
+  void (*m_ack_cb)(uint16_t id, void *user_data, ns_endpoint *e);
+  int (*m_send_cb)(uint16_t id, void *buffer, uint32_t nbytes,
+                   ns_endpoint *dst);
+  int (*m_recv_cb)(uint16_t id, const void *buffer, uint32_t nbytes,
+                   ns_endpoint *src);
   void *m_user_data;
 };
 
@@ -87,8 +86,8 @@ static void RemoveEndpoint(ns_server *context, uint32_t index) {
   --context->m_endpoint_count;
 
   if(notifyRemoval) {
-    context->m_state_callback(NETSERVER_STATE_ENDPOINT_DISCONNECTED, &e,
-                              context->m_user_data);
+    context->m_state_cb(NETSERVER_STATE_ENDPOINT_DISCONNECTED, &e,
+                        context->m_user_data);
   }
 }
 
@@ -120,10 +119,10 @@ struct ns_server *netserver_create(ns_config *config) {
   server->m_timeout = 5000;
   server->m_simulator = config->simulator;
   server->m_socket = socket;
-  server->m_packet_callback = config->packet_callback;
-  server->m_send_callback = config->send_callback;
-  server->m_recv_callback = config->recv_callback;
-  server->m_state_callback = config->state_callback;
+  server->m_ack_cb = config->ack_callback;
+  server->m_send_cb = config->send_callback;
+  server->m_recv_cb = config->recv_callback;
+  server->m_state_cb = config->state_callback;
   server->m_user_data = config->user_data;
 
   server->m_endpoints = new ns_endpoint[server->m_endpoint_capacity];
@@ -196,8 +195,8 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
       e.m_last_recv_time = get_time_ms();
       LOG_TRANSPORT_INF("client connected");
 
-      context->m_state_callback(NETSERVER_STATE_ENDPOINT_CONNECTED, &e,
-                                context->m_user_data);
+      context->m_state_cb(NETSERVER_STATE_ENDPOINT_CONNECTED, &e,
+                          context->m_user_data);
     }
   } else if(header->m_type == PacketType::Disconnect) {
     LOG_TRANSPORT_INF("client gracefully disconnected");
@@ -213,13 +212,17 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
       if(result != 0) {
         LOG_TRANSPORT_WAR("failed to read: %d", packet->m_sequence);
       } else {
-        e.m_reliability.Ack(packet->m_sequence, packet->m_ack,
-                            packet->m_ack_bitmask, context->m_packet_callback,
-                            context->m_user_data);
+        sequence_bitmask_t acks = e.m_reliability.Ack(
+            packet->m_sequence, packet->m_ack, packet->m_ack_bitmask);
 
-        context->m_recv_callback(packet->m_sequence,
-                                 buffer + sizeof(PayloadPacket),
-                                 nbytes - sizeof(PayloadPacket), &e);
+        for(int i = 0; i < 32; ++i) {
+          if((acks & (1 << i)) != 0) {
+            context->m_ack_cb(packet->m_ack + i, context->m_user_data, &e);
+          }
+        }
+
+        context->m_recv_cb(packet->m_sequence, buffer + sizeof(PayloadPacket),
+                           nbytes - sizeof(PayloadPacket), &e);
 
         e.m_last_recv_time = get_time_ms();
 
@@ -292,9 +295,8 @@ void netserver_update(struct ns_server *context) {
       header->m_sequence = endpoint.m_reliability.GenerateNewSequenceId(
           &header->m_ack, &header->m_ack_bitmask);
 
-      context->m_send_callback(header->m_sequence,
-                               buffer + sizeof(PayloadPacket),
-                               nbytes - sizeof(PayloadPacket), &endpoint);
+      context->m_send_cb(header->m_sequence, buffer + sizeof(PayloadPacket),
+                         nbytes - sizeof(PayloadPacket), &endpoint);
 
       if(netserver_send(context, endpoint.m_address, buffer, nbytes)) {
         LOG_TRANSPORT_DBG("sent: PacketType::Payload");

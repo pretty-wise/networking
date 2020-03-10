@@ -93,7 +93,7 @@ static int cli_recv_func(uint16_t id, const void* buffer, uint32_t nbytes) {
     return 0;
 }
 
-static void srv_packet_func(uint16_t id, void *user_data) {
+static void srv_ack_func(uint16_t id, void *user_data, ns_endpoint* e) {
 
 }
 
@@ -134,7 +134,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     ns_config srvConfig;
     srvConfig.port = serverPort;
     srvConfig.num_endpoints = 16;
-    srvConfig.packet_callback = srv_packet_func;
+    srvConfig.ack_callback = srv_ack_func;
     srvConfig.send_callback = srv_send_func;
     srvConfig.recv_callback = srv_recv_func;
     srvConfig.state_callback = src_state_func;

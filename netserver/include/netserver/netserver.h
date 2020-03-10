@@ -14,7 +14,7 @@ struct ns_config {
 
   void (*state_callback)(uint32_t state, ns_endpoint *endpoint,
                          void *user_data);
-  void (*packet_callback)(uint16_t id, void *user_data);
+  void (*ack_callback)(uint16_t id, void *user_data, ns_endpoint *e);
   int (*send_callback)(uint16_t id, void *buffer, uint32_t nbytes,
                        ns_endpoint *dst);
   int (*recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes,

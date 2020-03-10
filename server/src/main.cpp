@@ -38,7 +38,7 @@ void term_handler(int signal) { g_running = false; }
 
 struct ns_server *g_server = nullptr;
 
-static void packet_func(uint16_t id, void *user_data) {}
+static void ack_func(uint16_t id, void *user_data, ns_endpoint *e) {}
 
 static int send_func(uint16_t id, void *buffer, uint32_t nbytes,
                      ns_endpoint *dst) {
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
   ns_config config;
   config.port = port;
   config.num_endpoints = 16;
-  config.packet_callback = packet_func;
+  config.ack_callback = ack_func;
   config.send_callback = send_func;
   config.recv_callback = recv_func;
   config.state_callback = state_func;

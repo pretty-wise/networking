@@ -5,10 +5,6 @@
 #include <cstdint>
 #include <string.h>
 
-typedef void (*on_ack)(sequence_t, void *);
-typedef int (*read_packet)(sequence_t, const void *buffer, uint32_t nbytes);
-typedef int (*write_packet)(sequence_t, void *buffer, uint32_t nbytes);
-
 class Reliability {
 public:
   static const sequence_t kStartSequenceId = 0;
@@ -38,8 +34,8 @@ public:
   // dispatch acks if not already dispatched.
 
   bool IsStale(sequence_t sequence);
-  void Ack(sequence_t sequence, sequence_t ack, sequence_bitmask_t ack_bitmask,
-           on_ack ack_func, void *user_data);
+  sequence_bitmask_t Ack(sequence_t sequence, sequence_t ack,
+                         sequence_bitmask_t ack_bitmask);
   void Reset();
 
   static void Test();

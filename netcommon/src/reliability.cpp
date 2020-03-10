@@ -54,9 +54,8 @@ bool Reliability::IsStale(sequence_t sequence) {
   return IsLessRecent(sequence, m_remote_head - kLogSize);
 }
 
-void Reliability::Ack(sequence_t sequence, sequence_t ack,
-                      sequence_bitmask_t ack_bitmask, on_ack ack_func,
-                      void *user_data) {
+sequence_bitmask_t Reliability::Ack(sequence_t sequence, sequence_t ack,
+                                    sequence_bitmask_t ack_bitmask) {
 
   if(IsMoreRecent(sequence, m_remote_head)) {
     // clean entries here
@@ -85,7 +84,25 @@ void Reliability::Ack(sequence_t sequence, sequence_t ack,
     // todo(kstasik): store transmission info
   }
 
+  sequence_bitmask_t toAckBitmask = 0;
   for(int i = 0; i < 32; ++i) {
+    sequence_t seq = ack - i;
+    bool is_acked = ack_bitmask & (1 << i);
+    if(is_acked) {
+      OutboundPacketInfo *sentInfo = FindSentPacketInfo(seq);
+      if(sentInfo && !sentInfo->m_acked) {
+        toAckBitmask |= (1 << i);
+
+        sentInfo->m_acked = true;
+        uint32_t rtt = get_time_ms() - sentInfo->m_send_time;
+        m_rtt += ((float)rtt - m_rtt) * 0.025f;
+        m_rtt_log.PushBack((float)rtt);
+        m_smoothed_rtt_log.PushBack(m_rtt);
+      }
+    }
+  }
+
+  /*for(int i = 0; i < 32; ++i) {
     sequence_t seq = ack - i;
     bool is_acked = ack_bitmask & (1 << i);
     if(is_acked) {
@@ -99,9 +116,11 @@ void Reliability::Ack(sequence_t sequence, sequence_t ack,
         ack_func(seq, user_data); // ack
       }
     }
-  }
+  }*/
   m_last_acked = ack;
   m_last_acked_bitmask = ack_bitmask;
+
+  return toAckBitmask;
 }
 
 void Reliability::Reset() {
@@ -151,8 +170,6 @@ static bool IsAcked(sequence_t id, sequence_t ack, sequence_bitmask_t bitmask) {
   return false;
 }
 
-static void test_ack_func(sequence_t id, void *) {}
-
 void Reliability::Test() {
   int loopCount = std::max<int>(2 * std::numeric_limits<sequence_t>::max(),
                                 2 * Reliability::kLogSize);
@@ -194,8 +211,7 @@ void Reliability::Test() {
 
       bool processed = !receiver.IsStale(sender_outbound_id);
       if(processed)
-        receiver.Ack(sender_outbound_id, receiver_ack, receiver_ack_bitmask,
-                     test_ack_func, nullptr);
+        receiver.Ack(sender_outbound_id, receiver_ack, receiver_ack_bitmask);
       assert(processed);
       assert(receiver.m_remote_head == sender_outbound_id);
 
@@ -205,8 +221,7 @@ void Reliability::Test() {
 
       processed = !sender.IsStale(receiver_outbound_id);
       if(processed)
-        sender.Ack(receiver_outbound_id, sender_ack, sender_ack_bitmask,
-                   test_ack_func, nullptr);
+        sender.Ack(receiver_outbound_id, sender_ack, sender_ack_bitmask);
 
       assert(IsAcked(sender_outbound_id, sender_ack, sender_ack_bitmask));
 
@@ -243,16 +258,14 @@ void Reliability::Test() {
       if(sender_outbound_id % 2 == 0) {
         processed = !receiver.IsStale(sender_outbound_id);
         if(processed)
-          receiver.Ack(sender_outbound_id, receiver_ack, receiver_ack_bitmask,
-                       test_ack_func, nullptr);
+          receiver.Ack(sender_outbound_id, receiver_ack, receiver_ack_bitmask);
       }
       sequence_t receiver_outbound_id =
           receiver.GenerateNewSequenceId(&sender_ack, &sender_ack_bitmask);
 
       processed = !sender.IsStale(receiver_outbound_id);
       if(processed)
-        sender.Ack(receiver_outbound_id, sender_ack, sender_ack_bitmask,
-                   test_ack_func, nullptr);
+        sender.Ack(receiver_outbound_id, sender_ack, sender_ack_bitmask);
 
       // printf("sender: %d, ack: %d, bmask: %d\n", sender_outbound_id,
       // sender_ack,
