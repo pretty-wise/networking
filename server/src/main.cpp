@@ -40,9 +40,15 @@ struct ns_server *g_server = nullptr;
 
 static void packet_func(uint16_t id, void *user_data) {}
 
-static int send_func(uint16_t id, void *buffer, uint32_t nbytes) { return 0; }
+static int send_func(uint16_t id, void *buffer, uint32_t nbytes,
+                     ns_endpoint *dst) {
+  return 0;
+}
 
-int recv_func(uint16_t id, const void *buffer, uint32_t nbytes) { return 0; }
+int recv_func(uint16_t id, const void *buffer, uint32_t nbytes,
+              ns_endpoint *src) {
+  return 0;
+}
 
 void state_func(uint32_t state, ns_endpoint *e, void *user_data) {}
 

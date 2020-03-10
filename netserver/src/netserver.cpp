@@ -44,8 +44,10 @@ struct ns_server {
   void (*m_state_callback)(uint32_t state, ns_endpoint *endpoint,
                            void *user_data);
   void (*m_packet_callback)(uint16_t id, void *user_data);
-  int (*m_send_callback)(uint16_t id, void *buffer, uint32_t nbytes);
-  int (*m_recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes);
+  int (*m_send_callback)(uint16_t id, void *buffer, uint32_t nbytes,
+                         ns_endpoint *dst);
+  int (*m_recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes,
+                         ns_endpoint *src);
   void *m_user_data;
 };
 
@@ -217,7 +219,7 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
 
         context->m_recv_callback(packet->m_sequence,
                                  buffer + sizeof(PayloadPacket),
-                                 nbytes - sizeof(PayloadPacket));
+                                 nbytes - sizeof(PayloadPacket), &e);
 
         e.m_last_recv_time = get_time_ms();
 
@@ -292,7 +294,7 @@ void netserver_update(struct ns_server *context) {
 
       context->m_send_callback(header->m_sequence,
                                buffer + sizeof(PayloadPacket),
-                               nbytes - sizeof(PayloadPacket));
+                               nbytes - sizeof(PayloadPacket), &endpoint);
 
       if(netserver_send(context, endpoint.m_address, buffer, nbytes)) {
         LOG_TRANSPORT_DBG("sent: PacketType::Payload");

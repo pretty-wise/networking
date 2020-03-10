@@ -97,11 +97,11 @@ static void srv_packet_func(uint16_t id, void *user_data) {
 
 }
 
-static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes) {
+static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes, ns_endpoint* dst) {
     return 0;
 }
 
-static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes) {
+static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes, ns_endpoint* src) {
     return 0;
 }
 
