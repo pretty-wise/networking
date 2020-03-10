@@ -17,7 +17,7 @@ static int read_func(sequence_t id, const void *buffer, uint32_t nbytes) {
 }
 static void ack_func(sequence_t ack, void *) {}
 
-struct Endpoint {
+struct ns_endpoint {
   sockaddr_storage m_address;
   enum class State {
     Undefined,
@@ -35,12 +35,14 @@ struct ns_server {
   uint32_t m_timeout; // todo(kstasik): cofigure this
   uint16_t m_endpoint_capacity;
   uint16_t m_endpoint_count;
-  Endpoint *m_endpoints;
+  ns_endpoint *m_endpoints;
   netsimulator *m_simulator;
 
   sockaddr_storage m_local;
   int m_socket;
 
+  void (*m_state_callback)(uint32_t state, ns_endpoint *endpoint,
+                           void *user_data);
   void (*m_packet_callback)(uint16_t id, void *user_data);
   int (*m_send_callback)(uint16_t id, void *buffer, uint32_t nbytes);
   int (*m_recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes);
@@ -53,10 +55,10 @@ static uint32_t AddEndpoint(ns_server *context, const sockaddr_storage &address,
     return -1;
   }
   for(auto i = 0; i < context->m_endpoint_capacity; ++i) {
-    Endpoint &e = context->m_endpoints[i];
-    if(e.m_state == Endpoint::State::Undefined) {
+    ns_endpoint &e = context->m_endpoints[i];
+    if(e.m_state == ns_endpoint::State::Undefined) {
       e.m_address = address;
-      e.m_state = Endpoint::State::Connecting;
+      e.m_state = ns_endpoint::State::Connecting;
       e.m_client_salt = client_salt;
       e.m_last_recv_time = get_time_ms();
       e.m_server_salt = e.m_last_recv_time; // todo(kstasik): generate it better
@@ -68,10 +70,12 @@ static uint32_t AddEndpoint(ns_server *context, const sockaddr_storage &address,
 }
 
 static void RemoveEndpoint(ns_server *context, uint32_t index) {
-  Endpoint &e = context->m_endpoints[index];
+  ns_endpoint &e = context->m_endpoints[index];
+
+  bool notifyRemoval = e.m_state == ns_endpoint::State::Connected;
 
   e.m_address = {};
-  e.m_state = Endpoint::State::Undefined;
+  e.m_state = ns_endpoint::State::Undefined;
   e.m_client_salt = 0;
   e.m_server_salt = 0;
   e.m_last_recv_time = 0;
@@ -79,6 +83,11 @@ static void RemoveEndpoint(ns_server *context, uint32_t index) {
   e.m_reliability.Reset();
 
   --context->m_endpoint_count;
+
+  if(notifyRemoval) {
+    context->m_state_callback(NETSERVER_STATE_ENDPOINT_DISCONNECTED, &e,
+                              context->m_user_data);
+  }
 }
 
 static uint32_t FindEndpoint(ns_server *context,
@@ -112,12 +121,13 @@ struct ns_server *netserver_create(ns_config *config) {
   server->m_packet_callback = config->packet_callback;
   server->m_send_callback = config->send_callback;
   server->m_recv_callback = config->recv_callback;
+  server->m_state_callback = config->state_callback;
   server->m_user_data = config->user_data;
 
-  server->m_endpoints = new Endpoint[server->m_endpoint_capacity];
+  server->m_endpoints = new ns_endpoint[server->m_endpoint_capacity];
   for(auto i = 0; i < server->m_endpoint_capacity; ++i) {
-    Endpoint &e = server->m_endpoints[i];
-    e.m_state = Endpoint::State::Undefined;
+    ns_endpoint &e = server->m_endpoints[i];
+    e.m_state = ns_endpoint::State::Undefined;
   }
 
   create_udp_addr("127.0.0.1", config->port, &server->m_local);
@@ -173,22 +183,25 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
     return;
   }
 
-  Endpoint &e = context->m_endpoints[endpoint_index];
+  ns_endpoint &e = context->m_endpoints[endpoint_index];
 
   if(header->m_type == PacketType::Establish &&
-     e.m_state == Endpoint::State::Connecting) {
+     e.m_state == ns_endpoint::State::Connecting) {
     auto *packet = (ConnectionEstablishPacket *)buffer;
     LOG_TRANSPORT_DBG("received: PacketType::Establish");
     if(packet->m_key == (e.m_client_salt ^ e.m_server_salt)) {
-      e.m_state = Endpoint::State::Connected;
+      e.m_state = ns_endpoint::State::Connected;
       e.m_last_recv_time = get_time_ms();
       LOG_TRANSPORT_INF("client connected");
+
+      context->m_state_callback(NETSERVER_STATE_ENDPOINT_CONNECTED, &e,
+                                context->m_user_data);
     }
   } else if(header->m_type == PacketType::Disconnect) {
     LOG_TRANSPORT_INF("client gracefully disconnected");
     RemoveEndpoint(context, endpoint_index);
   } else if(header->m_type == PacketType::Payload &&
-            e.m_state == Endpoint::State::Connected) {
+            e.m_state == ns_endpoint::State::Connected) {
     auto *packet = (PayloadPacket *)buffer;
     if(e.m_reliability.IsStale(packet->m_sequence)) {
       LOG_TRANSPORT_WAR("received stale packet %d", packet->m_sequence);
@@ -260,8 +273,8 @@ void netserver_update(struct ns_server *context) {
 
   // outgoing
   for(auto i = 0; i < context->m_endpoint_capacity; ++i) {
-    Endpoint &endpoint = context->m_endpoints[i];
-    if(endpoint.m_state == Endpoint::State::Connecting) {
+    ns_endpoint &endpoint = context->m_endpoints[i];
+    if(endpoint.m_state == ns_endpoint::State::Connecting) {
       auto *header = (ConnectionResponsePacket *)buffer;
       header->m_protocol_id = game_protocol_id;
       header->m_type = PacketType::Response;
@@ -270,7 +283,7 @@ void netserver_update(struct ns_server *context) {
       if(netserver_send(context, endpoint.m_address, buffer, nbytes)) {
         LOG_TRANSPORT_DBG("sent: PacketType::Response");
       }
-    } else if(endpoint.m_state == Endpoint::State::Connected) {
+    } else if(endpoint.m_state == ns_endpoint::State::Connected) {
       auto *header = (PayloadPacket *)buffer;
       header->m_protocol_id = game_protocol_id;
       header->m_type = PacketType::Payload;
@@ -290,8 +303,8 @@ void netserver_update(struct ns_server *context) {
 
   // timeout
   for(auto i = 0; i < context->m_endpoint_capacity; ++i) {
-    Endpoint &endpoint = context->m_endpoints[i];
-    if(endpoint.m_state != Endpoint::State::Undefined) {
+    ns_endpoint &endpoint = context->m_endpoints[i];
+    if(endpoint.m_state != ns_endpoint::State::Undefined) {
       uint32_t time = get_time_ms() - endpoint.m_last_recv_time;
 
       if(time > context->m_timeout) {

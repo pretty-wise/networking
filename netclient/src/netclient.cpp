@@ -73,6 +73,9 @@ nc_client *netclient_create(const nc_config *config) {
 }
 
 void netclient_destroy(nc_client *context) {
+  if(context->m_state == NETCLIENT_STATE_CONNECTED) {
+    netclient_disconnect(context);
+  }
   close_socket(context->m_socket);
   delete context;
 }

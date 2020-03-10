@@ -6,9 +6,6 @@
 #define NETCLIENT_STATE_CONNECTING 2
 #define NETCLIENT_STATE_CONNECTED 3
 
-#define NETCLIENT_PACKET_ACK 0
-#define NETCLIENT_PACKET_NACK 1
-
 extern "C" {
 
 struct nc_client;
@@ -17,9 +14,7 @@ struct nc_config {
   const char *server_address;
   uint16_t server_port;
   int32_t timeout;
-
   struct netsimulator *simulator;
-
   void (*state_callback)(int32_t state, void *user_data);
   void (*packet_callback)(uint16_t id, void *user_data);
   int (*send_callback)(uint16_t id, void *buffer, uint32_t nbytes);

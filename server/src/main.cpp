@@ -44,6 +44,8 @@ static int send_func(uint16_t id, void *buffer, uint32_t nbytes) { return 0; }
 
 int recv_func(uint16_t id, const void *buffer, uint32_t nbytes) { return 0; }
 
+void state_func(uint32_t state, ns_endpoint *e, void *user_data) {}
+
 int main(int argc, char *argv[]) {
   if(SIG_ERR == signal(SIGINT, term_handler)) {
     return -1;
@@ -64,6 +66,7 @@ int main(int argc, char *argv[]) {
   config.packet_callback = packet_func;
   config.send_callback = send_func;
   config.recv_callback = recv_func;
+  config.state_callback = state_func;
   config.user_data = nullptr;
 
   g_server = netserver_create(&config);

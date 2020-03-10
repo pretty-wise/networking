@@ -9,6 +9,7 @@
 #include "netcommon/netsimulator.h"
 #include <stdio.h>
 #include <string>
+#include <vector>
 #import <Cocoa/Cocoa.h>
 #import <OpenGL/gl.h>
 #import <OpenGL/glu.h>
@@ -42,18 +43,18 @@
     [self setNeedsDisplay:YES];
 }
 
-struct stateInfo {
+struct ClientStateInfo {
     int32_t state = 0;
     int16_t last_acked = 0;
     int16_t last_nacked = 0;
     std::string acks;
 };
 
-static stateInfo netClientState;
+static ClientStateInfo netClientState;
 
 static void cli_state_update_func(int32_t state, void* user_data)
 {
-    stateInfo* info = (stateInfo*)user_data;
+    ClientStateInfo* info = (ClientStateInfo*)user_data;
     info->state = state;
     info->acks.clear();
 }
@@ -64,7 +65,7 @@ static void cli_packet_func(uint16_t id, void* user_data)
     char buff[128];
     sprintf(buff, "%c%d", res == 0 ? ' ' : '~', id);
 
-    stateInfo* info = (stateInfo*)user_data;
+    ClientStateInfo* info = (ClientStateInfo*)user_data;
     if(res == 0) {
         info->last_acked = id;
     } else {
@@ -77,6 +78,12 @@ static void cli_packet_func(uint16_t id, void* user_data)
         info->acks = info->acks.substr(info->acks.size() - limit);
     }
 }
+
+struct ServerStateInfo {
+    std::vector<ns_endpoint*> endpoints;
+};
+
+static ServerStateInfo netServerState;
 
 static int cli_send_func(uint16_t id, void* buffer, uint32_t nbytes) {
     return 0;
@@ -96,6 +103,15 @@ static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes) {
 
 static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes) {
     return 0;
+}
+
+static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
+    ServerStateInfo* info = (ServerStateInfo*)user_data;
+    if(state == NETSERVER_STATE_ENDPOINT_CONNECTED) {
+        info->endpoints.push_back(e);
+    } else if(state == NETSERVER_STATE_ENDPOINT_DISCONNECTED) {
+        info->endpoints.erase(std::remove(begin(info->endpoints), end(info->endpoints), e));
+    }
 }
   
 
@@ -121,7 +137,8 @@ static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes) {
     srvConfig.packet_callback = srv_packet_func;
     srvConfig.send_callback = srv_send_func;
     srvConfig.recv_callback = srv_recv_func;
-    srvConfig.user_data = nullptr;
+    srvConfig.state_callback = src_state_func;
+    srvConfig.user_data = &netServerState;
     srvConfig.simulator = netSimulator;
 
     netServer = netserver_create(&srvConfig);
@@ -170,7 +187,16 @@ static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes) {
 
     bool running = netClient != nullptr;
 
-    ImGui::Begin("Net Client");
+    ImGui::Begin("Debug Info");
+
+    if(ImGui::CollapsingHeader("Server")) {
+        ImGui::Text("Endpoints:");
+        for(int i = 0; i < netServerState.endpoints.size(); ++i) {
+            ImGui::SameLine();
+            ImGui::Text(" %p", netServerState.endpoints[i]);
+        }
+        ImGui::Text("Connected: %d", netServerState.endpoints.size());
+    }
 
     if(ImGui::CollapsingHeader("Client")) {
         ImGui::InputText("Host", g_hostname, IM_ARRAYSIZE(g_hostname));
