@@ -6,6 +6,7 @@
 extern "C" {
 
 struct ns_endpoint;
+struct ns_server;
 
 struct ns_config {
   uint16_t port;
@@ -22,7 +23,28 @@ struct ns_config {
   void *user_data;
 };
 
-struct ns_server *netserver_create(ns_config *config);
-void netserver_destroy(struct ns_server *context);
-void netserver_update(struct ns_server *context);
+ns_server *netserver_create(ns_config *config);
+
+void netserver_destroy(ns_server *context);
+
+void netserver_update(ns_server *context);
+
+struct ns_transport_info {
+  ns_endpoint *endpoint;
+
+  int32_t last_sent;
+  int32_t last_received;
+  int32_t last_acked;
+  int32_t last_acked_bitmask;
+
+  uint32_t last_rtt;
+  uint32_t smoothed_rtt;
+
+  float *rtt_log;
+  float *smoothed_rtt_log;
+  uint32_t rtt_log_size;
+};
+
+int netserver_transport_info(ns_server *context, ns_endpoint *endpoint,
+                             ns_transport_info *info);
 }

@@ -190,12 +190,21 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     ImGui::Begin("Debug Info");
 
     if(ImGui::CollapsingHeader("Server")) {
-        ImGui::Text("Endpoints:");
+        ImGui::Text("Connected Endpoints: %d", netServerState.endpoints.size());
+        ImGui::Separator();
+
         for(int i = 0; i < netServerState.endpoints.size(); ++i) {
-            ImGui::SameLine();
-            ImGui::Text(" %p", netServerState.endpoints[i]);
+            ns_endpoint* e = netServerState.endpoints[i];
+            ns_transport_info info = {};
+            int res = netserver_transport_info(netServer, e, &info);
+            if(0 == res) {
+                ImGui::BulletText("Endpoint %p", info.endpoint);
+                ImGui::Text("RTT: %dms (%dms)", info.smoothed_rtt, info.last_rtt);
+                ImGui::Text("Sent: %d. Acked: %d. Received: %d",  info.last_sent, info.last_acked, info.last_received);
+            } else {
+                ImGui::Text("err: %d", res);
+            }
         }
-        ImGui::Text("Connected: %d", netServerState.endpoints.size());
     }
 
     if(ImGui::CollapsingHeader("Client")) {

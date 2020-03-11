@@ -318,3 +318,38 @@ void netserver_update(struct ns_server *context) {
     }
   }
 }
+
+int netserver_transport_info(ns_server *context, ns_endpoint *endpoint,
+                             ns_transport_info *info) {
+  if(!context || !endpoint || !info)
+    return -1;
+
+  auto index = 0;
+  do {
+    if(&context->m_endpoints[index] == endpoint) {
+      if(endpoint->m_state != ns_endpoint::State::Connected)
+        return -2;
+      else
+        break;
+    }
+  } while(++index < context->m_endpoint_count);
+
+  if(index == context->m_endpoint_count)
+    return -3;
+
+  info->endpoint = endpoint;
+
+  info->last_received = endpoint->m_reliability.GetLastRecvId();
+  info->last_sent = endpoint->m_reliability.GetLastSendId();
+  info->last_acked = endpoint->m_reliability.GetLastAckedId();
+  info->last_acked_bitmask = endpoint->m_reliability.GetLastAckedIdBitmask();
+
+  info->last_rtt = endpoint->m_reliability.m_last_rtt;
+  info->smoothed_rtt = endpoint->m_reliability.m_smoothed_rtt;
+
+  info->rtt_log = endpoint->m_reliability.m_rtt_log.Begin();
+  info->smoothed_rtt_log = endpoint->m_reliability.m_smoothed_rtt_log.Begin();
+  info->rtt_log_size = endpoint->m_reliability.m_rtt_log.Size();
+
+  return 0;
+}
