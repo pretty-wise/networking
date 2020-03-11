@@ -39,9 +39,13 @@ struct nc_transport_info {
   int32_t last_received;
   int32_t last_acked;
   int32_t last_acked_bitmask;
-  float *rtt;
-  float *smoothed_rtt;
-  uint32_t rtt_size;
+
+  uint32_t last_rtt;
+  uint32_t smoothed_rtt;
+
+  float *rtt_log;
+  float *smoothed_rtt_log;
+  uint32_t rtt_log_size;
 };
 
 int netclient_transport_info(nc_client *context, nc_transport_info *info);

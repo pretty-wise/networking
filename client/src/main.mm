@@ -243,8 +243,9 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 ImGui::Text("Last Ackd: %d", info.last_acked);
                 ImGui::Text("Last Ackd Bitmask: %d", info.last_acked_bitmask);
 
-                ImGui::PlotLines("RTT", info.rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
-                ImGui::PlotLines("Smoothed RTT", info.smoothed_rtt, info.rtt_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
+                ImGui::Text("RTT: %dms (%dms)", info.smoothed_rtt, info.last_rtt);
+                ImGui::PlotLines("RTT", info.rtt_log, info.rtt_log_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
+                ImGui::PlotLines("Smoothed RTT", info.smoothed_rtt_log, info.rtt_log_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
             }
         }
     }

@@ -73,5 +73,6 @@ private:
 public:
   CircularBuffer<float> m_rtt_log;
   CircularBuffer<float> m_smoothed_rtt_log;
-  float m_rtt;
+  uint32_t m_last_rtt;
+  float m_smoothed_rtt;
 };

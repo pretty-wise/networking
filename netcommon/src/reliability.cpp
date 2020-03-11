@@ -23,8 +23,7 @@ recv:
 4. decode 32 acks and notify the application about not already acked packets.
 */
 
-Reliability::Reliability()
-    : m_rtt_log(200), m_smoothed_rtt_log(200), m_rtt(30.f) {
+Reliability::Reliability() : m_rtt_log(200), m_smoothed_rtt_log(200) {
   Reset();
 }
 
@@ -94,29 +93,15 @@ sequence_bitmask_t Reliability::Ack(sequence_t sequence, sequence_t ack,
         toAckBitmask |= (1 << i);
 
         sentInfo->m_acked = true;
-        uint32_t rtt = get_time_ms() - sentInfo->m_send_time;
-        m_rtt += ((float)rtt - m_rtt) * 0.025f;
-        m_rtt_log.PushBack((float)rtt);
-        m_smoothed_rtt_log.PushBack(m_rtt);
+        m_last_rtt = get_time_ms() - sentInfo->m_send_time;
+
+        m_smoothed_rtt += ((float)m_last_rtt - m_smoothed_rtt) * 0.025f;
+        m_rtt_log.PushBack((float)m_last_rtt);
+        m_smoothed_rtt_log.PushBack((float)m_smoothed_rtt);
       }
     }
   }
 
-  /*for(int i = 0; i < 32; ++i) {
-    sequence_t seq = ack - i;
-    bool is_acked = ack_bitmask & (1 << i);
-    if(is_acked) {
-      OutboundPacketInfo *sentInfo = FindSentPacketInfo(seq);
-      if(sentInfo && !sentInfo->m_acked) {
-        sentInfo->m_acked = true;
-        uint32_t rtt = get_time_ms() - sentInfo->m_send_time;
-        m_rtt += ((float)rtt - m_rtt) * 0.025f;
-        m_rtt_log.PushBack((float)rtt);
-        m_smoothed_rtt_log.PushBack(m_rtt);
-        ack_func(seq, user_data); // ack
-      }
-    }
-  }*/
   m_last_acked = ack;
   m_last_acked_bitmask = ack_bitmask;
 
@@ -135,6 +120,10 @@ void Reliability::Reset() {
   m_smoothed_rtt_log.Clear();
   m_rtt_log.Resize(m_rtt_log.Capacity());
   m_smoothed_rtt_log.Resize(m_smoothed_rtt_log.Capacity());
+
+  uint32_t initialRttValue = 30;
+  m_last_rtt = initialRttValue;
+  m_smoothed_rtt = initialRttValue;
 }
 
 Reliability::OutboundPacketInfo *
