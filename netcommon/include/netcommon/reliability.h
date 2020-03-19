@@ -1,6 +1,6 @@
 #pragma once
 #include "netcommon/circularbuffer.h"
-#include "netcommon/packet.h"
+#include "netcommon/sequence.h"
 #include "netcommon/time.h"
 #include <cstdint>
 #include <string.h>

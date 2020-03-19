@@ -1,7 +1,7 @@
 #include "netclient/netclient.h"
 #include "netcommon/log.h"
 #include "netcommon/netsimulator.h"
-#include "netcommon/packet.h"
+#include "netcommon/protocol.h"
 #include "netcommon/reliability.h"
 #include "netcommon/socket.h"
 #include "netcommon/time.h"
