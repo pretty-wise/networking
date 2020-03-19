@@ -18,7 +18,7 @@ set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG -D_DEBUG")
 add_subdirectory(extern)
 
 #
-# common library
+# network common library
 #
 
 add_library (netcommon STATIC
@@ -44,7 +44,7 @@ target_include_directories (netcommon PUBLIC
 )
 
 #
-# server library
+# network server library
 #
 
 add_library(netserver STATIC
@@ -62,7 +62,7 @@ target_include_directories (netserver PUBLIC
 )
 
 #
-# client library
+# network client library
 #
 
 add_library(netclient STATIC
@@ -70,13 +70,66 @@ add_library(netclient STATIC
 	netclient/src/netclient.cpp
 )
 
-target_link_libraries(netclient PRIVATE netcommon)
+target_link_libraries (netclient PRIVATE netcommon)
 
 target_include_directories (netclient PRIVATE src include)
 
 target_include_directories (netclient PUBLIC 
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/netclient/include>
 	$<INSTALL_INTERFACE:netclient/include>
+)
+
+#
+# simulation common library
+#
+
+add_library(simcommon STATIC
+	simcommon/include/simcommon/protocol.h
+	simcommon/include/simcommon/types.h
+	simcommon/src/types.cpp
+	simcommon/include/simcommon/time.h
+	simcommon/src/time.cpp
+)
+
+target_include_directories (simcommon PRIVATE src include)
+
+target_include_directories (simcommon PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/simcommon/include>
+	$<INSTALL_INTERFACE:simcommon/include>
+)
+
+#
+# simulation server library
+#
+add_library(simserver STATIC
+	simserver/include/simserver/simserver.h
+	simserver/src/simserver.cpp
+)
+
+target_link_libraries (simserver PUBLIC simcommon)
+
+target_include_directories (simserver PRIVATE src include)
+
+target_include_directories (simserver PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/simserver/include>
+	$<INSTALL_INTERFACE:simserver/include>
+)
+
+#
+# simulation client library
+#
+add_library(simclient STATIC
+	simclient/include/simclient/simclient.h
+	simclient/src/simclient.cpp
+)
+
+target_link_libraries (simclient PUBLIC simcommon)
+
+target_include_directories (simclient PRIVATE src include)
+
+target_include_directories (simclient PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/simclient/include>
+	$<INSTALL_INTERFACE:simclient/include>
 )
 
 #
@@ -105,4 +158,4 @@ add_executable (client
 	client/src/imgui_impl_osx.mm
 )
 
-target_link_libraries(client PRIVATE netclient netserver netcommon imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)
+target_link_libraries(client PRIVATE netclient netserver netcommon simclient simserver imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)

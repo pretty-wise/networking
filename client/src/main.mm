@@ -7,6 +7,10 @@
 #include "netclient/netclient.h"
 #include "netserver/netserver.h"
 #include "netcommon/netsimulator.h"
+
+#include "simserver/simserver.h"
+#include "simclient/simclient.h"
+
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -23,6 +27,10 @@
     struct nc_client* netClient;
     struct netsimulator* netSimulator;
     struct ns_server* netServer;
+
+    struct ss_simulation* simServer;
+    struct sc_simulation* simClient;
+
     NSTimer* animationTimer;
     int serverPort;
 }
@@ -44,6 +52,7 @@
 }
 
 struct ClientStateInfo {
+    sc_simulation** simulation = nullptr;
     int32_t state = 0;
     int16_t last_acked = 0;
     int16_t last_nacked = 0;
@@ -55,17 +64,28 @@ static ClientStateInfo netClientState;
 static void cli_state_update_func(int32_t state, void* user_data)
 {
     ClientStateInfo* info = (ClientStateInfo*)user_data;
+
+    if(state == NETCLIENT_STATE_CONNECTED) {
+        *info->simulation = simclient_create();
+    } else if(state == NETCLIENT_STATE_DISCONNECTED) {
+        delete *info->simulation;
+        *info->simulation = nullptr;
+    }
+
     info->state = state;
     info->acks.clear();
 }
 
 static void cli_packet_func(uint16_t id, void* user_data)
 {
+    ClientStateInfo* info = (ClientStateInfo*)user_data;
+
+    simclient_ack(*info->simulation, id);
+
     int res = 0;
     char buff[128];
     sprintf(buff, "%c%d", res == 0 ? ' ' : '~', id);
 
-    ClientStateInfo* info = (ClientStateInfo*)user_data;
     if(res == 0) {
         info->last_acked = id;
     } else {
@@ -79,34 +99,45 @@ static void cli_packet_func(uint16_t id, void* user_data)
     }
 }
 
+static int cli_send_func(uint16_t id, void* buffer, uint32_t nbytes, void *user_data) {
+    ClientStateInfo* info = (ClientStateInfo*)user_data;
+
+    return simclient_write(*info->simulation, id, buffer, nbytes);
+} 
+
+static int cli_recv_func(uint16_t id, const void* buffer, uint32_t nbytes, void *user_data) {
+    ClientStateInfo* info = (ClientStateInfo*)user_data;
+
+    return simclient_read(*info->simulation, id, buffer, nbytes);
+}
+
 struct ServerStateInfo {
+    ss_simulation* simulation;
     std::vector<ns_endpoint*> endpoints;
 };
 
 static ServerStateInfo netServerState;
 
-static int cli_send_func(uint16_t id, void* buffer, uint32_t nbytes, void *user_data) {
-    return 0;
-} 
-
-static int cli_recv_func(uint16_t id, const void* buffer, uint32_t nbytes, void *user_data) {
-    return 0;
-}
-
 static void srv_ack_func(uint16_t id, ns_endpoint* e, void *user_data) {
-
+    ServerStateInfo* info = (ServerStateInfo*)user_data;
+    simserver_ack(id, (simpeer_t*)e, info->simulation);
 }
 
 static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes, ns_endpoint* dst, void *user_data) {
-    return 0;
+    ServerStateInfo* info = (ServerStateInfo*)user_data;
+    return simserver_write(id, buffer, nbytes, (simpeer_t*)dst, info->simulation);
 }
 
 static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes, ns_endpoint* src, void *user_data) {
-    return 0;
+    ServerStateInfo* info = (ServerStateInfo*)user_data;
+    return simserver_read(id, buffer, nbytes, (simpeer_t*)src, info->simulation);
 }
 
 static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     ServerStateInfo* info = (ServerStateInfo*)user_data;
+
+    simserver_connection(state, (simpeer_t*)e, info->simulation);
+
     if(state == NETSERVER_STATE_ENDPOINT_CONNECTED) {
         info->endpoints.push_back(e);
     } else if(state == NETSERVER_STATE_ENDPOINT_DISCONNECTED) {
@@ -125,7 +156,21 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     if (swapInterval == 0)
         NSLog(@"Error: Cannot set swap interval.");
 #endif
+
+    //
+    // create simulation
+    //
+    ss_config cliSimConfig;
+    simserver_make_default(&cliSimConfig);
+    simServer = simserver_create(&cliSimConfig);
+    netServerState.simulation = simServer;
+
+    simClient = nullptr;
+    netClientState.simulation = &simClient;
   
+    //
+    // create networking
+    //
     netsimulator_config simconfig;
     netsimulator_default_config(&simconfig);
 
@@ -168,6 +213,14 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
 
     if(netSimulator) {
         netsimulator_update(netSimulator);
+    }
+
+    if(simServer) {
+        simserver_update(simServer);
+    }
+
+    if(simClient) {
+        simclient_update(simClient);
     }
 
     // Start the Dear ImGui frame
@@ -273,6 +326,36 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
         }
     }
 
+    if(simServer) {
+        if(ImGui::CollapsingHeader("Simulation Server")) {
+            ss_info info = {};
+            simserver_info(simServer, &info);
+            if(info.running) {
+                if(ImGui::Button("Stop")) {
+                    simserver_stop(simServer);
+                }
+
+                ImGui::Text("Head: %d", info.head);
+            } else {
+                if(ImGui::Button("Start")) {
+                    ss_config config;
+                    simserver_make_default(&config);
+                    simserver_start(simServer, &config);
+                }
+            }
+        }
+    }
+
+    if(simClient) {
+        if(ImGui::CollapsingHeader("Simulation Client")) {
+            sc_info info = {};
+            if(0 == simclient_info(simClient, &info)) {
+                ImGui::Text("Local Head: %d", info.local_head);
+                ImGui::Text("Remote Head: %d", info.remote_head);
+            }
+        }
+    }
+
     ImGui::End();
 
 	// Rendering
@@ -333,6 +416,14 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
 
     if(netServer) {
         netserver_destroy(netServer);
+    }
+
+    if(simServer) {
+        simserver_destroy(simServer);
+    }
+
+    if(simClient) {
+        simclient_destroy(simClient);
     }
 }
 
