@@ -41,12 +41,12 @@ struct ns_server {
   sockaddr_storage m_local;
   int m_socket;
 
-  void (*m_state_cb)(uint32_t state, ns_endpoint *endpoint, void *user_data);
-  void (*m_ack_cb)(uint16_t id, void *user_data, ns_endpoint *e);
-  int (*m_send_cb)(uint16_t id, void *buffer, uint32_t nbytes,
-                   ns_endpoint *dst);
+  void (*m_state_cb)(uint32_t state, ns_endpoint *e, void *user_data);
+  void (*m_ack_cb)(uint16_t id, ns_endpoint *e, void *user_data);
+  int (*m_send_cb)(uint16_t id, void *buffer, uint32_t nbytes, ns_endpoint *dst,
+                   void *user_data);
   int (*m_recv_cb)(uint16_t id, const void *buffer, uint32_t nbytes,
-                   ns_endpoint *src);
+                   ns_endpoint *src, void *user_data);
   void *m_user_data;
 };
 
@@ -217,12 +217,13 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
 
         for(int i = 0; i < 32; ++i) {
           if((acks & (1 << i)) != 0) {
-            context->m_ack_cb(packet->m_ack + i, context->m_user_data, &e);
+            context->m_ack_cb(packet->m_ack + i, &e, context->m_user_data);
           }
         }
 
         context->m_recv_cb(packet->m_sequence, buffer + sizeof(PayloadPacket),
-                           nbytes - sizeof(PayloadPacket), &e);
+                           nbytes - sizeof(PayloadPacket), &e,
+                           context->m_user_data);
 
         e.m_last_recv_time = get_time_ms();
 
@@ -296,7 +297,8 @@ void netserver_update(struct ns_server *context) {
           &header->m_ack, &header->m_ack_bitmask);
 
       context->m_send_cb(header->m_sequence, buffer + sizeof(PayloadPacket),
-                         nbytes - sizeof(PayloadPacket), &endpoint);
+                         nbytes - sizeof(PayloadPacket), &endpoint,
+                         context->m_user_data);
 
       if(netserver_send(context, endpoint.m_address, buffer, nbytes)) {
         LOG_TRANSPORT_DBG("sent: PacketType::Payload");

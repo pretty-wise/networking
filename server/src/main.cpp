@@ -38,15 +38,15 @@ void term_handler(int signal) { g_running = false; }
 
 struct ns_server *g_server = nullptr;
 
-static void ack_func(uint16_t id, void *user_data, ns_endpoint *e) {}
+static void ack_func(uint16_t id, ns_endpoint *e, void *user_data) {}
 
 static int send_func(uint16_t id, void *buffer, uint32_t nbytes,
-                     ns_endpoint *dst) {
+                     ns_endpoint *dst, void *user_data) {
   return 0;
 }
 
 int recv_func(uint16_t id, const void *buffer, uint32_t nbytes,
-              ns_endpoint *src) {
+              ns_endpoint *src, void *user_data) {
   return 0;
 }
 

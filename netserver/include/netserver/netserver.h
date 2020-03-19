@@ -15,11 +15,11 @@ struct ns_config {
 
   void (*state_callback)(uint32_t state, ns_endpoint *endpoint,
                          void *user_data);
-  void (*ack_callback)(uint16_t id, void *user_data, ns_endpoint *e);
+  void (*ack_callback)(uint16_t id, ns_endpoint *e, void *user_data);
   int (*send_callback)(uint16_t id, void *buffer, uint32_t nbytes,
-                       ns_endpoint *dst);
+                       ns_endpoint *dst, void *user_data);
   int (*recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes,
-                       ns_endpoint *src);
+                       ns_endpoint *src, void *user_data);
   void *user_data;
 };
 

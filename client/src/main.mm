@@ -85,23 +85,23 @@ struct ServerStateInfo {
 
 static ServerStateInfo netServerState;
 
-static int cli_send_func(uint16_t id, void* buffer, uint32_t nbytes) {
+static int cli_send_func(uint16_t id, void* buffer, uint32_t nbytes, void *user_data) {
     return 0;
 } 
 
-static int cli_recv_func(uint16_t id, const void* buffer, uint32_t nbytes) {
+static int cli_recv_func(uint16_t id, const void* buffer, uint32_t nbytes, void *user_data) {
     return 0;
 }
 
-static void srv_ack_func(uint16_t id, void *user_data, ns_endpoint* e) {
+static void srv_ack_func(uint16_t id, ns_endpoint* e, void *user_data) {
 
 }
 
-static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes, ns_endpoint* dst) {
+static int srv_send_func(uint16_t id, void *buffer, uint32_t nbytes, ns_endpoint* dst, void *user_data) {
     return 0;
 }
 
-static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes, ns_endpoint* src) {
+static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes, ns_endpoint* src, void *user_data) {
     return 0;
 }
 

@@ -21,10 +21,11 @@ struct nc_client {
 
   netsimulator *m_simulator;
 
-  void (*m_state_cb)(int32_t, void *);
-  void (*m_packet_cb)(sequence_t, void *);
-  int (*m_send_cb)(uint16_t id, void *buffer, uint32_t nbytes);
-  int (*m_recv_cb)(uint16_t id, const void *buffer, uint32_t nbytes);
+  void (*m_state_cb)(int32_t state, void *user_data);
+  void (*m_packet_cb)(sequence_t id, void *user_data);
+  int (*m_send_cb)(uint16_t id, void *buffer, uint32_t nbytes, void *user_data);
+  int (*m_recv_cb)(uint16_t id, const void *buffer, uint32_t nbytes,
+                   void *user_data);
   void *m_user_data;
 };
 
@@ -130,9 +131,9 @@ static void netclient_recv(nc_client *context, uint8_t *buffer, uint32_t nbytes,
     if(context->m_reliability.IsStale(packet->m_sequence)) {
       LOG_TRANSPORT_WAR("stale packet %d", packet->m_sequence);
     } else {
-      int result =
-          context->m_recv_cb(packet->m_sequence, buffer + sizeof(PayloadPacket),
-                             nbytes - sizeof(PayloadPacket));
+      int result = context->m_recv_cb(
+          packet->m_sequence, buffer + sizeof(PayloadPacket),
+          nbytes - sizeof(PayloadPacket), context->m_user_data);
       if(result != 0) {
         LOG_TRANSPORT_WAR("received: PacketType::Payload. read error %d",
                           packet->m_sequence);
@@ -183,7 +184,7 @@ void netclient_update(nc_client *context) {
     header->m_sequence = context->m_reliability.GenerateNewSequenceId(
         &header->m_ack, &header->m_ack_bitmask);
     context->m_send_cb(header->m_sequence, buffer + sizeof(PayloadPacket),
-                       nbytes - sizeof(PayloadPacket));
+                       nbytes - sizeof(PayloadPacket), context->m_user_data);
   }
 
   if(!netclient_send(context, buffer, nbytes)) {

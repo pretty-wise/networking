@@ -17,8 +17,10 @@ struct nc_config {
   struct netsimulator *simulator;
   void (*state_callback)(int32_t state, void *user_data);
   void (*packet_callback)(uint16_t id, void *user_data);
-  int (*send_callback)(uint16_t id, void *buffer, uint32_t nbytes);
-  int (*recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes);
+  int (*send_callback)(uint16_t id, void *buffer, uint32_t nbytes,
+                       void *user_data);
+  int (*recv_callback)(uint16_t id, const void *buffer, uint32_t nbytes,
+                       void *user_data);
   void *user_data;
 };
 
