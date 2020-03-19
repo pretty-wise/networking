@@ -3,7 +3,7 @@
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 
-double to_us_ratio() {
+static double to_us_ratio() {
   mach_timebase_info_data_t info;
   (void)mach_timebase_info(&info);
 
@@ -12,7 +12,7 @@ double to_us_ratio() {
   return ratio;
 }
 
-double to_ms_ratio() { return to_us_ratio() * 0.000001; }
+static double to_ms_ratio() { return to_us_ratio() * 0.000001; }
 
 uint32_t get_time_ms() {
   uint64_t current = mach_absolute_time();
