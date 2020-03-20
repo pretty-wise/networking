@@ -10,12 +10,6 @@ struct serversim_t {
   // map<entityid_t, commandinput_t> prev_input;
 };
 
-void step(serversim_t &sim) {
-  //
-  sim.head += 1;
-  sim.frame_count += 1;
-}
-
 struct ss_simulation {
   ss_config config;
 
@@ -23,14 +17,31 @@ struct ss_simulation {
   uint64_t last_update_time;
   uint64_t time_acc;
 
-  /* todo(kstasik):
-    struct PeerData {
-      entityid_t owned;
-      circular_buffer<pair<frameid_t, commandinput_t>> input_buffer;
-    };
-    map<simpeer_t, PeerData> m_peers;
-  */
+  struct PeerData {
+    entityid_t owned = 0;
+    siminput_t last_input; // todo(kstasik): change to buffer below
+    // circular_buffer<pair<frameid_t, commandinput_t>> input_buffer;
+  };
+
+  simpeer_t *peer_id[SIMSERVER_PEER_CAPACITY];
+  PeerData peer_data[SIMSERVER_PEER_CAPACITY];
+  uint32_t peer_count;
 };
+
+static uint32_t find_peer(ss_simulation *sim, simpeer_t *peer) {
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->peer_id[i] == peer) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void step(serversim_t &sim) {
+  //
+  sim.head += 1;
+  sim.frame_count += 1;
+}
 
 void simserver_make_default(ss_config *config) {
   config->frame_duration = 1000;
@@ -40,6 +51,13 @@ void simserver_make_default(ss_config *config) {
 
 ss_simulation *simserver_create(ss_config *config) {
   ss_simulation *sim = new ss_simulation{};
+
+  sim->peer_count = 0;
+  for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    sim->peer_id[i] = nullptr;
+    sim->peer_data[i] = {};
+  }
+
   if(config) {
     sim->config = *config;
     simserver_start(sim, config);
@@ -81,7 +99,7 @@ void simserver_stop(ss_simulation *sim) {
 
 uint32_t simserver_write(uint16_t id, void *buffer, uint32_t nbytes,
                          simpeer_t *peer, ss_simulation *sim) {
-  assert(nbytes >= sizeof(UpdateMessage));
+  assert(sizeof(UpdateMessage) <= nbytes);
   auto *msg = (UpdateMessage *)buffer;
   msg->m_type = MessageType::Update;
   if(sim->simulation) {
@@ -102,7 +120,20 @@ uint32_t simserver_write(uint16_t id, void *buffer, uint32_t nbytes,
 uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,
                         simpeer_t *peer, ss_simulation *sim) {
   const auto *base = (const SimulationMessage *)buffer;
-  return 0;
+
+  uint32_t peer_idx = find_peer(sim, peer);
+  if(peer_idx == -1)
+    return -1;
+
+  if(base->m_type == MessageType::Command) {
+    // todo(kstasik): read other data
+    const auto *msg = (const CommandMessage *)buffer;
+
+    siminput_t input = {msg->m_buttons};
+    sim->peer_data[peer_idx].last_input = input;
+    return 0;
+  }
+  return -2;
 }
 
 void simserver_ack(uint16_t id, simpeer_t *peer, ss_simulation *sim) {
@@ -110,7 +141,21 @@ void simserver_ack(uint16_t id, simpeer_t *peer, ss_simulation *sim) {
 }
 
 void simserver_connection(uint32_t state, simpeer_t *peer, ss_simulation *sim) {
-  // connections not used for now
+  if(state == SIMSERVER_STATE_PEER_CONNECTED) {
+    uint32_t empty_idx = find_peer(sim, nullptr);
+    if(empty_idx != -1) {
+      sim->peer_id[empty_idx] = peer;
+      sim->peer_data[empty_idx] = {};
+      sim->peer_count += 1;
+    }
+  } else if(state == SIMSERVER_STATE_PEER_DISCONNECTED) {
+    uint32_t peer_idx = find_peer(sim, peer);
+    if(peer_idx != -1) {
+      sim->peer_id[peer_idx] = nullptr;
+      sim->peer_data[peer_idx] = {};
+      sim->peer_count -= 1;
+    }
+  }
 }
 
 void simserver_update(ss_simulation *sim) {
@@ -133,6 +178,13 @@ int simserver_info(ss_simulation *sim, ss_info *info) {
   info->running = sim->simulation != nullptr;
   if(sim->simulation) {
     info->head = sim->simulation->head;
+    info->peer_count = sim->peer_count;
+
+    for(int i = 0, j = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+      if(sim->peer_id[i] != nullptr) {
+        info->peer_id[j++] = sim->peer_id[i];
+      }
+    }
   }
   return 0;
 }

@@ -1,6 +1,10 @@
 #pragma once
 #include "simcommon/types.h"
 
+#define SIMSERVER_STATE_PEER_CONNECTED 2
+#define SIMSERVER_STATE_PEER_DISCONNECTED 3
+#define SIMSERVER_PEER_CAPACITY 16
+
 struct ss_simulation;
 
 struct ss_config {
@@ -34,6 +38,8 @@ void simserver_update(ss_simulation *sim);
 struct ss_info {
   bool running;
   frameid_t head;
+  uint32_t peer_count;
+  simpeer_t *peer_id[SIMSERVER_PEER_CAPACITY];
 };
 
 int simserver_info(ss_simulation *sim, ss_info *info);

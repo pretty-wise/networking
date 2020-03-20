@@ -61,12 +61,18 @@ struct ClientStateInfo {
 
 static ClientStateInfo netClientState;
 
+static void cli_get_input(siminput_t* input) {
+    input->m_buttons = 0xabcd;
+}
+
 static void cli_state_update_func(int32_t state, void* user_data)
 {
     ClientStateInfo* info = (ClientStateInfo*)user_data;
 
     if(state == NETCLIENT_STATE_CONNECTED) {
-        *info->simulation = simclient_create();
+        sc_config config;
+        config.input_callback = cli_get_input;
+        *info->simulation = simclient_create(&config);
     } else if(state == NETCLIENT_STATE_DISCONNECTED) {
         delete *info->simulation;
         *info->simulation = nullptr;
@@ -135,6 +141,9 @@ static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes, ns_en
 
 static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     ServerStateInfo* info = (ServerStateInfo*)user_data;
+
+    static_assert(NETSERVER_STATE_ENDPOINT_CONNECTED == SIMSERVER_STATE_PEER_CONNECTED);
+    static_assert(NETSERVER_STATE_ENDPOINT_DISCONNECTED == SIMSERVER_STATE_PEER_DISCONNECTED);
 
     simserver_connection(state, (simpeer_t*)e, info->simulation);
 
@@ -336,6 +345,10 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 }
 
                 ImGui::Text("Head: %d", info.head);
+                ImGui::Text("Peers: %d/%d", info.peer_count, SIMSERVER_PEER_CAPACITY);
+                for(int i = 0; i < info.peer_count; ++i) {
+                    ImGui::BulletText("%p", info.peer_id[i]);
+                }
             } else {
                 if(ImGui::Button("Start")) {
                     ss_config config;

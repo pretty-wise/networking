@@ -3,7 +3,11 @@
 
 struct sc_simulation;
 
-sc_simulation *simclient_create();
+struct sc_config {
+  void (*input_callback)(siminput_t *input);
+};
+
+sc_simulation *simclient_create(sc_config *config);
 
 void simclient_destroy(sc_simulation *);
 
