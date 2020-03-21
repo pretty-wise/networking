@@ -27,7 +27,59 @@ struct nc_client {
   int (*m_recv_cb)(uint16_t id, const void *buffer, uint32_t nbytes,
                    void *user_data);
   void *m_user_data;
+
+  enum TimeSyncState { None, Running, Done };
+  static const uint32_t MAX_TIME_SYNC_SAMPLES = 32;
+
+  struct TimeSyncSample {
+    uint32_t m_schedule_time;
+    uint64_t m_request_send_time;
+    uint64_t m_request_recv_time;
+    uint64_t m_response_send_time;
+    uint64_t m_response_recv_time;
+  };
+
+  TimeSyncState m_time_sync_state;
+  TimeSyncSample m_time_sync_samples[MAX_TIME_SYNC_SAMPLES];
+  int64_t m_server_time_offset;
 };
+
+static void start_time_sync(nc_client *client) {
+  uint32_t t = get_time_ms();
+  uint32_t dt = 100;
+  client->m_time_sync_state = nc_client::TimeSyncState::Running;
+  for(uint32_t i = 0; i < nc_client::MAX_TIME_SYNC_SAMPLES; ++i) {
+    client->m_time_sync_samples[i].m_schedule_time = t + dt * i;
+  }
+  client->m_server_time_offset = 0;
+}
+
+static void finish_time_sync(nc_client *client) {
+  // todo: discard the outliers, select best candidates only
+  // todo: time sync is skewed by the update tick.
+  //       server should wait for the system event about receiving a packet
+  //		 that would make m_responseSendTime and m_requestRecvTime be
+  // actually different 		 and more precise
+
+  client->m_time_sync_state = nc_client::TimeSyncState::Done;
+
+  int64_t totalDiff = 0;
+
+  for(uint32_t i = 0; i < nc_client::MAX_TIME_SYNC_SAMPLES; ++i) {
+    const auto &sample = client->m_time_sync_samples[i];
+
+    uint64_t rtt = sample.m_response_recv_time - sample.m_request_send_time;
+    uint64_t localTime = sample.m_request_send_time + (rtt / 2);
+    uint64_t serverTime =
+        sample.m_request_recv_time +
+        (sample.m_response_send_time - sample.m_request_recv_time);
+    int64_t diff = localTime - serverTime;
+    totalDiff += diff;
+  }
+
+  int64_t clockOffset = totalDiff / nc_client::MAX_TIME_SYNC_SAMPLES;
+  client->m_server_time_offset = clockOffset;
+}
 
 void netclient_make_default(nc_config *config) {
   config->timeout = 5000;
@@ -127,6 +179,7 @@ static void netclient_recv(nc_client *context, uint8_t *buffer, uint32_t nbytes,
         context->m_state_cb(NETCLIENT_STATE_CONNECTED, context->m_user_data);
       context->m_state = NETCLIENT_STATE_CONNECTED;
       LOG_TRANSPORT_INF("connected");
+      start_time_sync(context);
     }
     if(context->m_reliability.IsStale(packet->m_sequence)) {
       LOG_TRANSPORT_WAR("stale packet %d", packet->m_sequence);
@@ -152,6 +205,19 @@ static void netclient_recv(nc_client *context, uint8_t *buffer, uint32_t nbytes,
         LOG_TRANSPORT_DBG("received: PacketType::Payload seq %d. ack: %d",
                           packet->m_sequence, packet->m_ack);
       }
+    }
+  } else if(header->m_type == PacketType::TimeSync) {
+    auto *packet = (TimeSync *)buffer;
+    packet->m_response_recv_time = get_time_us();
+
+    if(packet->m_id < nc_client::MAX_TIME_SYNC_SAMPLES) {
+      nc_client::TimeSyncSample &sample =
+          context->m_time_sync_samples[packet->m_id];
+      sample.m_request_send_time = packet->m_request_send_time;
+      sample.m_request_recv_time = packet->m_request_recv_time;
+      sample.m_response_send_time = packet->m_response_send_time;
+      sample.m_response_recv_time = packet->m_response_recv_time;
+      sample.m_schedule_time = 0;
     }
   }
 }
@@ -191,6 +257,35 @@ void netclient_update(nc_client *context) {
     LOG_TRANSPORT_ERR("socket send error: %d", error);
   } else {
     context->m_last_send_time = get_time_ms();
+  }
+
+  // send time sync request
+  if(context->m_time_sync_state == nc_client::TimeSyncState::Running) {
+    auto *header = (TimeSync *)buffer;
+    header->m_protocol_id = game_protocol_id;
+    header->m_type = PacketType::TimeSync;
+
+    uint32_t numPending = 0;
+    for(uint32_t i = 0; i < nc_client::MAX_TIME_SYNC_SAMPLES; ++i) {
+      nc_client::TimeSyncSample &sample = context->m_time_sync_samples[i];
+      if(sample.m_schedule_time == 0)
+        continue;
+
+      numPending++;
+      if(sample.m_schedule_time <= get_time_ms()) {
+        header->m_id = i;
+        header->m_request_send_time = get_time_us();
+        header->m_request_recv_time = 0;
+        header->m_response_send_time = 0;
+        header->m_response_recv_time = 0;
+        netclient_send(context, buffer, sizeof(TimeSync));
+        sample.m_schedule_time = get_time_ms() + 500;
+      }
+    }
+
+    if(numPending == 0) {
+      finish_time_sync(context);
+    }
   }
 
   if(context->m_simulator) {
@@ -307,5 +402,13 @@ int netclient_transport_info(nc_client *context, nc_transport_info *info) {
   info->rtt_log = context->m_reliability.m_rtt_log.Begin();
   info->smoothed_rtt_log = context->m_reliability.m_smoothed_rtt_log.Begin();
   info->rtt_log_size = context->m_reliability.m_rtt_log.Size();
+
+  if(context->m_time_sync_state == nc_client::TimeSyncState::None) {
+    info->server_time_offset = -1;
+  } else if(context->m_time_sync_state == nc_client::TimeSyncState::Running) {
+    info->server_time_offset = -2;
+  } else {
+    info->server_time_offset = context->m_server_time_offset;
+  }
   return 0;
 }

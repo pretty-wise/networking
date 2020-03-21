@@ -48,6 +48,8 @@ struct nc_transport_info {
   float *rtt_log;
   float *smoothed_rtt_log;
   uint32_t rtt_log_size;
+
+  uint64_t server_time_offset;
 };
 
 int netclient_transport_info(nc_client *context, nc_transport_info *info);

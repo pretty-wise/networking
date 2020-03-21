@@ -8,6 +8,7 @@ enum class PacketType : uint8_t {
   Establish = 3,  // client  -> server
   Payload = 4,    // client <-> server
   Disconnect = 5, // client  -> server
+  TimeSync = 6,   // client <-> server
 };
 
 const uint32_t game_protocol_id = 0x1234;
@@ -40,6 +41,16 @@ struct ConnectionDisconnectPacket {
   uint32_t m_protocol_id;
   PacketType m_type;
   uint32_t m_key;
+};
+
+struct TimeSync {
+  uint32_t m_protocol_id;
+  PacketType m_type;
+  uint32_t m_id;
+  uint64_t m_request_send_time;
+  uint64_t m_request_recv_time;
+  uint64_t m_response_send_time;
+  uint64_t m_response_recv_time;
 };
 
 struct PayloadPacket {

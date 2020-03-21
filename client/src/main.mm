@@ -251,7 +251,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
 
     ImGui::Begin("Debug Info");
 
-    if(ImGui::CollapsingHeader("Server")) {
+    if(ImGui::CollapsingHeader("Server", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Connected Endpoints: %d", netServerState.endpoints.size());
         ImGui::Separator();
 
@@ -269,7 +269,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
         }
     }
 
-    if(ImGui::CollapsingHeader("Client")) {
+    if(ImGui::CollapsingHeader("Client", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputText("Host", g_hostname, IM_ARRAYSIZE(g_hostname));
         ImGui::InputInt("Port", &g_port, 0, 9000);
         ImGui::Text("Status: %s", running ? "Running" : "Stopped");
@@ -317,6 +317,8 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 ImGui::Text("RTT: %dms (%dms)", info.smoothed_rtt, info.last_rtt);
                 ImGui::PlotLines("RTT", info.rtt_log, info.rtt_log_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
                 ImGui::PlotLines("Smoothed RTT", info.smoothed_rtt_log, info.rtt_log_size, 0, NULL, 0.f, 200.f, ImVec2(0, 80));
+
+                ImGui::Text("Server Offset %lluus", info.server_time_offset);
             }
         }
     }

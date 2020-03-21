@@ -231,6 +231,21 @@ static void netserver_recv(struct ns_server *context, uint8_t *buffer,
                           packet->m_sequence, packet->m_ack);
       }
     }
+  } else if(header->m_type == PacketType::TimeSync) {
+    auto *packet = (TimeSync *)buffer;
+
+    const uint32_t outnbytes = 1280;
+    uint8_t outBuffer[outnbytes];
+
+    auto *output = (TimeSync *)outBuffer;
+    output->m_protocol_id = game_protocol_id;
+    output->m_type = PacketType::TimeSync;
+    output->m_id = packet->m_id;
+    output->m_request_send_time = packet->m_request_send_time;
+    output->m_request_recv_time = get_time_us();
+    output->m_response_send_time = get_time_us();
+    output->m_response_recv_time = 0;
+    netserver_send(context, e.m_address, outBuffer, sizeof(TimeSync));
   }
 }
 
