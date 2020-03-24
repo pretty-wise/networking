@@ -251,7 +251,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
 
     ImGui::Begin("Debug Info");
 
-    if(ImGui::CollapsingHeader("Server", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if(ImGui::CollapsingHeader("Server")) {
         ImGui::Text("Connected Endpoints: %d", netServerState.endpoints.size());
         ImGui::Separator();
 
@@ -269,7 +269,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
         }
     }
 
-    if(ImGui::CollapsingHeader("Client", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if(ImGui::CollapsingHeader("Client")) {
         ImGui::InputText("Host", g_hostname, IM_ARRAYSIZE(g_hostname));
         ImGui::InputInt("Port", &g_port, 0, 9000);
         ImGui::Text("Status: %s", running ? "Running" : "Stopped");
@@ -338,7 +338,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     }
 
     if(simServer) {
-        if(ImGui::CollapsingHeader("Simulation Server")) {
+        if(ImGui::CollapsingHeader("Simulation Server", ImGuiTreeNodeFlags_DefaultOpen)) {
             ss_info info = {};
             simserver_info(simServer, &info);
             if(info.running) {
@@ -362,11 +362,13 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     }
 
     if(simClient) {
-        if(ImGui::CollapsingHeader("Simulation Client")) {
+        if(ImGui::CollapsingHeader("Simulation Client", ImGuiTreeNodeFlags_DefaultOpen)) {
             sc_info info = {};
             if(0 == simclient_info(simClient, &info)) {
                 ImGui::Text("Local Head: %d", info.local_head);
                 ImGui::Text("Remote Head: %d", info.remote_head);
+                ImGui::Text("Acked Frame: %d", info.acked_frame);
+                ImGui::Text("Prediction Offset: %lldus (%lldus +%lldus)", info.desired_offset, info.prediction_offset, info.prediction_acceleration);
             }
         }
     }

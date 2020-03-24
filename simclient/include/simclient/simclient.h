@@ -25,6 +25,10 @@ struct sc_info {
   bool running;
   frameid_t local_head;
   frameid_t remote_head;
+  frameid_t acked_frame;
+  int64_t prediction_offset;
+  int64_t desired_offset;
+  int64_t prediction_acceleration;
 };
 
 int simclient_info(sc_simulation *sim, sc_info *info);
