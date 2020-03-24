@@ -1,6 +1,6 @@
 #include "simserver/simserver.h"
 #include "simcommon/protocol.h"
-#include "simcommon/time.h"
+#include "utils/time.h"
 #include <assert.h>
 
 struct serversim_t {
@@ -46,7 +46,7 @@ static void step(serversim_t &sim) {
 void simserver_make_default(ss_config *config) {
   config->frame_duration = 1000 * 1000;
   config->start_frame = 0;
-  config->start_time = sim_get_time_us();
+  config->start_time = get_time_us();
 }
 
 ss_simulation *simserver_create(ss_config *config) {
@@ -160,7 +160,7 @@ void simserver_connection(uint32_t state, simpeer_t *peer, ss_simulation *sim) {
 
 void simserver_update(ss_simulation *sim) {
   if(sim->simulation) {
-    uint64_t now = sim_get_time_us();
+    uint64_t now = get_time_us();
     uint64_t dt = now - sim->last_update_time;
     assert(dt >= 0);
 

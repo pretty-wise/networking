@@ -1,4 +1,4 @@
-#include "simcommon/time.h"
+#include "utils/time.h"
 
 #include <mach/mach.h>
 #include <mach/mach_time.h>
@@ -14,7 +14,7 @@ static double to_us_ratio() {
 
 static double to_ms_ratio() { return to_us_ratio() * 0.001; }
 
-uint32_t sim_get_time_ms() {
+uint32_t get_time_ms() {
   uint64_t current = mach_absolute_time();
 
   static double ratio = to_ms_ratio();
@@ -22,7 +22,7 @@ uint32_t sim_get_time_ms() {
   return (uint32_t)(current * ratio);
 }
 
-uint64_t sim_get_time_us() {
+uint64_t get_time_us() {
   uint64_t current = mach_absolute_time();
 
   static double ratio = to_us_ratio();

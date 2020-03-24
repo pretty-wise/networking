@@ -1,7 +1,7 @@
 #pragma once
-#include "netcommon/circularbuffer.h"
 #include "netcommon/sequence.h"
-#include "netcommon/time.h"
+#include "utils/circularbuffer.h"
+#include "utils/time.h"
 #include <cstdint>
 #include <string.h>
 

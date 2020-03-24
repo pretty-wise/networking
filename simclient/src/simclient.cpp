@@ -1,6 +1,6 @@
 #include "simclient/simclient.h"
 #include "simcommon/protocol.h"
-#include "simcommon/time.h"
+#include "utils/time.h"
 #include <assert.h>
 #include <math.h>
 
@@ -36,7 +36,7 @@ static void start_simulation(sc_simulation *sim, uint64_t start_time,
   // todo(kstasik): m_remote_head calculations does not include
   // time synchronisation for now. it needs to be added to accurately deprict
   // remote_head on the client
-  uint64_t now = sim_get_time_us();
+  uint64_t now = get_time_us();
   uint64_t since_simulation_start = now - start_time;
 
   sim->m_last_update_time = now;
@@ -138,7 +138,7 @@ void simclient_update(sc_simulation *sim) {
     return;
 
   if(sim->m_simulation) {
-    uint64_t now = sim_get_time_us();
+    uint64_t now = get_time_us();
     uint64_t dt = now - sim->m_last_update_time;
 
     // update server simulation frame

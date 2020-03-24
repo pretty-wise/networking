@@ -18,23 +18,39 @@ set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG -D_DEBUG")
 add_subdirectory(extern)
 
 #
+# utils library
+#
+
+add_library(utils STATIC
+	utils/include/utils/time.h
+	utils/src/time.cpp
+	utils/include/utils/circularbuffer.h
+	utils/src/circularbuffer.cpp
+)
+
+target_include_directories (utils PRIVATE src include)
+
+target_include_directories (utils PUBLIC 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/include>
+	$<INSTALL_INTERFACE:utils/include>
+)
+
+#
 # network common library
 #
 
 add_library (netcommon STATIC
 	netcommon/include/netcommon/socket.h
 	netcommon/src/socket.cpp
-	netcommon/include/netcommon/time.h
-	netcommon/src/time.cpp
 	netcommon/include/netcommon/reliability.h
 	netcommon/src/reliability.cpp
 	netcommon/include/netcommon/log.h
 	netcommon/src/log.cpp
-	netcommon/include/netcommon/circularbuffer.h
-	netcommon/src/circularbuffer.cpp
 	netcommon/include/netcommon/netsimulator.h
 	netcommon/src/netsimulator.cpp
 )
+
+target_link_libraries(netcommon PUBLIC utils)
 
 target_include_directories (netcommon PRIVATE src include)
 
@@ -87,8 +103,6 @@ add_library(simcommon STATIC
 	simcommon/include/simcommon/protocol.h
 	simcommon/include/simcommon/types.h
 	simcommon/src/types.cpp
-	simcommon/include/simcommon/time.h
-	simcommon/src/time.cpp
 )
 
 target_include_directories (simcommon PRIVATE src include)
@@ -106,7 +120,7 @@ add_library(simserver STATIC
 	simserver/src/simserver.cpp
 )
 
-target_link_libraries (simserver PUBLIC simcommon)
+target_link_libraries (simserver PUBLIC simcommon PRIVATE utils)
 
 target_include_directories (simserver PRIVATE src include)
 
@@ -123,7 +137,7 @@ add_library(simclient STATIC
 	simclient/src/simclient.cpp
 )
 
-target_link_libraries (simclient PUBLIC simcommon)
+target_link_libraries (simclient PUBLIC simcommon PRIVATE utils)
 
 target_include_directories (simclient PRIVATE src include)
 

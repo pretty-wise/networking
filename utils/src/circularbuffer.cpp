@@ -1,4 +1,4 @@
-#include "netcommon/circularbuffer.h"
+#include "utils/circularbuffer.h"
 #include <mach/mach_init.h>
 #include <mach/vm_map.h>
 #include <mach/vm_page_size.h>

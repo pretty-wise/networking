@@ -1,6 +1,6 @@
 #include "netcommon/netsimulator.h"
 #include "netcommon/socket.h"
-#include "netcommon/time.h"
+#include "utils/time.h"
 #include <cstring>
 #include <stdlib.h>
 
