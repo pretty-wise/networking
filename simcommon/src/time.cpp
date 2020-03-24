@@ -9,10 +9,10 @@ static double to_us_ratio() {
 
   double ratio = (double)info.numer / (double)info.denom;
 
-  return ratio;
+  return ratio * 0.001;
 }
 
-static double to_ms_ratio() { return to_us_ratio() * 0.000001; }
+static double to_ms_ratio() { return to_us_ratio() * 0.001; }
 
 uint32_t sim_get_time_ms() {
   uint64_t current = mach_absolute_time();
@@ -25,7 +25,7 @@ uint32_t sim_get_time_ms() {
 uint64_t sim_get_time_us() {
   uint64_t current = mach_absolute_time();
 
-  static double ratio = to_ms_ratio();
+  static double ratio = to_us_ratio();
 
   return (uint64_t)(current * ratio);
 }
