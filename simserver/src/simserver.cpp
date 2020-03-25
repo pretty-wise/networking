@@ -44,7 +44,7 @@ static void step(serversim_t &sim) {
 }
 
 void simserver_make_default(ss_config *config) {
-  config->frame_duration = 1000 * 1000;
+  config->frame_duration = 32 * 1000;
   config->start_frame = 0;
   config->start_time = get_time_us();
 }

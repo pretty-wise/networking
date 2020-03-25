@@ -29,6 +29,10 @@ struct sc_info {
   int64_t prediction_offset;
   int64_t desired_offset;
   int64_t prediction_acceleration;
+
+  float *offset_log;
+  float *acceleration_log;
+  uint32_t log_size;
 };
 
 int simclient_info(sc_simulation *sim, sc_info *info);

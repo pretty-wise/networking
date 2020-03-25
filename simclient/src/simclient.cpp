@@ -1,5 +1,6 @@
 #include "simclient/simclient.h"
 #include "simcommon/protocol.h"
+#include "utils/circularbuffer.h"
 #include "utils/time.h"
 #include <assert.h>
 #include <math.h>
@@ -11,28 +12,31 @@ struct simclient_t {
 void step(simclient_t *sim, siminput_t &input) { sim->m_head += 1; }
 
 struct sc_simulation {
-  simclient_t *m_simulation;
+  sc_simulation() : m_offset_log(128), m_acceleration_log(128) {}
+
+  simclient_t *m_simulation = nullptr;
+
   siminput_t m_last_input;
   void (*m_input_callback)(siminput_t *input);
 
-  uint64_t m_last_update_time;
-  uint64_t m_frame_duration;
-  uint64_t m_remote_sim_time_accumulator;
+  uint64_t m_last_update_time = 0;
+  uint64_t m_frame_duration = 0;
+  uint64_t m_remote_sim_time_accumulator = 0;
+  frameid_t m_remote_head = 0;
+  int64_t m_predition_offset = 0;
+  int64_t m_acceleration = 0;
+  uint64_t m_local_sim_time_accumulator = 0;
+  int64_t m_desired_predition_offset = 0;
+  frameid_t m_acked_remote_frame = 0;
 
-  frameid_t m_remote_head;
-
-  int64_t m_predition_offset;
-  int64_t m_acceleration;
-
-  uint64_t m_local_sim_time_accumulator;
-
-  int64_t m_desired_predition_offset;
-
-  frameid_t m_acked_remote_frame;
+  CircularBuffer<float> m_offset_log;
+  CircularBuffer<float> m_acceleration_log;
 };
 
 static void start_simulation(sc_simulation *sim, uint64_t start_time,
                              uint64_t frame_duration, frameid_t start_frame) {
+  assert(frame_duration > 0);
+
   // todo(kstasik): m_remote_head calculations does not include
   // time synchronisation for now. it needs to be added to accurately deprict
   // remote_head on the client
@@ -184,8 +188,8 @@ void simclient_update(sc_simulation *sim) {
 
         step(sim->m_simulation, sim->m_last_input);
 
-        // m_predictionLog.Put((float)m_predictionOffset);
-        // m_accelerationLog.Put((float)m_acceleration);
+        sim->m_offset_log.PushBack((float)sim->m_predition_offset);
+        sim->m_acceleration_log.PushBack((float)sim->m_acceleration);
 
         sim->m_local_sim_time_accumulator -= frame_duration;
         sim->m_predition_offset -= sim->m_acceleration;
@@ -210,6 +214,11 @@ int simclient_info(sc_simulation *sim, sc_info *info) {
     info->prediction_offset = sim->m_predition_offset;
     info->desired_offset = sim->m_desired_predition_offset;
     info->prediction_acceleration = sim->m_acceleration;
+
+    assert(sim->m_offset_log.Size() == sim->m_acceleration_log.Size());
+    info->acceleration_log = sim->m_acceleration_log.Begin();
+    info->offset_log = sim->m_offset_log.Begin();
+    info->log_size = sim->m_offset_log.Size();
   }
   return 0;
 }

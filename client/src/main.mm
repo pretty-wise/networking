@@ -369,6 +369,11 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 ImGui::Text("Remote Head: %d", info.remote_head);
                 ImGui::Text("Acked Frame: %d", info.acked_frame);
                 ImGui::Text("Prediction Offset: %lldus (%lldus +%lldus)", info.desired_offset, info.prediction_offset, info.prediction_acceleration);
+
+                if(info.log_size > 0) {
+                    ImGui::PlotLines("Prediction Offset", info.offset_log, info.log_size, 0, NULL, 0.f, 100000.f, ImVec2(0, 80));
+                    ImGui::PlotLines("Acceleration", info.acceleration_log, info.log_size, 0, NULL, -10000.f, 10000.f, ImVec2(0, 80));
+                }
             }
         }
     }
