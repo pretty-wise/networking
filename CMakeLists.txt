@@ -25,7 +25,6 @@ add_library(utils STATIC
 	utils/include/utils/time.h
 	utils/src/time.cpp
 	utils/include/utils/circularbuffer.h
-	utils/src/circularbuffer.cpp
 )
 
 target_include_directories (utils PRIVATE src include)
