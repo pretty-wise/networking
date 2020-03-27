@@ -13,6 +13,7 @@ struct SimulationMessage {
 
 struct CommandMessage {
   MessageType m_type;
+  frameid_t m_frame_id;
   uint32_t m_buttons;
 };
 

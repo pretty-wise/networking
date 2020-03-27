@@ -101,7 +101,10 @@ uint32_t simclient_write(sc_simulation *sim, uint16_t id, void *buffer,
 
   auto *msg = (CommandMessage *)buffer;
   msg->m_type = MessageType::Command;
-  msg->m_buttons = sim->m_last_input.m_buttons;
+  if(sim->m_simulation) {
+    msg->m_frame_id = sim->m_simulation->m_head;
+    msg->m_buttons = sim->m_last_input.m_buttons;
+  }
   return sizeof(CommandMessage);
 }
 

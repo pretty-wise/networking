@@ -349,7 +349,11 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 ImGui::Text("Head: %d", info.head);
                 ImGui::Text("Peers: %d/%d", info.peer_count, SIMSERVER_PEER_CAPACITY);
                 for(int i = 0; i < info.peer_count; ++i) {
-                    ImGui::BulletText("%p", info.peer_id[i]);
+                    ImGui::BulletText("Id: %p", info.peer_id[i]);
+                    ImGui::BulletText("Remote EntityId: %d", info.remote_entity[i]);
+                    ImGui::BulletText("Input Buffer Size: %d", info.input_buffer_size[i]);
+
+                    ImGui::PlotLines("Input Buffer", info.buffer_size_log[i], info.buffer_size_log_size[i], 0, NULL, 0, 10.f, ImVec2(0, 80));
                 }
             } else {
                 if(ImGui::Button("Start")) {
@@ -485,7 +489,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     NSRect viewRect = NSMakeRect(100.0, 100.0, 100.0 + 1280.0, 100 + 720.0);
 
     _window = [[NSWindow alloc] initWithContentRect:viewRect styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable|NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:YES];
-    [_window setTitle:@"Dear ImGui OSX+OpenGL2 Example"];
+    [_window setTitle:@"Networking"];
     [_window setAcceptsMouseMovedEvents:YES];
     [_window setOpaque:YES];
     [_window makeKeyAndOrderFront:NSApp];
@@ -499,8 +503,8 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     NSMenu* appMenu;
     NSMenuItem* menuItem;
 
-    appMenu = [[NSMenu alloc] initWithTitle:@"Dear ImGui OSX+OpenGL2 Example"];
-    menuItem = [appMenu addItemWithTitle:@"Quit Dear ImGui OSX+OpenGL2 Example" action:@selector(terminate:) keyEquivalent:@"q"];
+    appMenu = [[NSMenu alloc] initWithTitle:@"Networking"];
+    menuItem = [appMenu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
     [menuItem setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
 
     menuItem = [[NSMenuItem alloc] init];

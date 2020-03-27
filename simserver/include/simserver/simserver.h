@@ -40,6 +40,10 @@ struct ss_info {
   frameid_t head;
   uint32_t peer_count;
   simpeer_t *peer_id[SIMSERVER_PEER_CAPACITY];
+  entityid_t remote_entity[SIMSERVER_PEER_CAPACITY];
+  uint32_t input_buffer_size[SIMSERVER_PEER_CAPACITY];
+  float *buffer_size_log[SIMSERVER_PEER_CAPACITY];
+  uint32_t buffer_size_log_size[SIMSERVER_PEER_CAPACITY];
 };
 
 int simserver_info(ss_simulation *sim, ss_info *info);

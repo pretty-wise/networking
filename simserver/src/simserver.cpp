@@ -1,5 +1,6 @@
 #include "simserver/simserver.h"
 #include "simcommon/protocol.h"
+#include "utils/circularbuffer.h"
 #include "utils/time.h"
 #include <assert.h>
 
@@ -7,7 +8,8 @@ struct serversim_t {
   frameid_t head;
   uint32_t frame_count;
 
-  // map<entityid_t, commandinput_t> prev_input;
+  entityid_t remote_entity[SIMSERVER_PEER_CAPACITY];
+  siminput_t prev_input[SIMSERVER_PEER_CAPACITY];
 };
 
 struct ss_simulation {
@@ -18,15 +20,81 @@ struct ss_simulation {
   uint64_t time_acc;
 
   struct PeerData {
+    PeerData() : input_buffer(128), buffer_size_log(128) {}
+
+    void Reset() {
+      input_buffer.Clear();
+      buffer_size_log.Clear();
+    }
     entityid_t owned = 0;
-    siminput_t last_input; // todo(kstasik): change to buffer below
-    // circular_buffer<pair<frameid_t, commandinput_t>> input_buffer;
+
+    struct FrameInput {
+      frameid_t frame;
+      siminput_t input;
+    };
+    CircularBuffer<FrameInput> input_buffer;
+    CircularBuffer<float> buffer_size_log;
   };
 
   simpeer_t *peer_id[SIMSERVER_PEER_CAPACITY];
   PeerData peer_data[SIMSERVER_PEER_CAPACITY];
-  uint32_t peer_count;
 };
+
+static uint32_t peer_count(ss_simulation *sim) {
+  uint32_t count = 0;
+  for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->peer_id[i] != nullptr)
+      ++count;
+  }
+  return count;
+}
+
+static uint32_t collect_input(ss_simulation *sim, frameid_t frame,
+                              entityid_t entities[SIMSERVER_PEER_CAPACITY],
+                              siminput_t input[SIMSERVER_PEER_CAPACITY]) {
+  uint32_t num_entities = 0;
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    ss_simulation::PeerData &info = sim->peer_data[i];
+    if(sim->peer_id[i] != nullptr && info.owned != 0) {
+      entities[num_entities] = info.owned;
+
+      siminput_t peer_input = {};
+
+      for(auto *it = info.input_buffer.Begin(); it != info.input_buffer.End();
+          ++it) {
+        if(it->frame == frame) {
+          peer_input = it->input;
+        }
+      }
+
+      // todo(kstasik): if the input is not found duplicate the last available
+      // input
+
+      input[num_entities] = peer_input;
+      num_entities++;
+    }
+  }
+  return num_entities;
+}
+
+static void remove_stale_input(ss_simulation *sim) {
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->peer_id[i] == nullptr)
+      continue;
+
+    auto &peer = sim->peer_data[i];
+    peer.buffer_size_log.PushBack((float)peer.input_buffer.Size());
+
+    while(peer.input_buffer.Size() > 0) {
+      auto *input = peer.input_buffer.Begin();
+      if(input->frame <= sim->simulation->head) {
+        peer.input_buffer.PopFront(1);
+      } else {
+        break;
+      }
+    }
+  }
+}
 
 static uint32_t find_peer(ss_simulation *sim, simpeer_t *peer) {
   for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
@@ -37,10 +105,37 @@ static uint32_t find_peer(ss_simulation *sim, simpeer_t *peer) {
   return -1;
 }
 
-static void step(serversim_t &sim) {
-  //
+static void add_peer(ss_simulation *sim, uint32_t index, simpeer_t *peer) {
+
+  static entityid_t entity_generator = 0;
+
+  // generate entity for a joining peer
+  entityid_t peer_entity = 0;
+  while(peer_entity == 0) {
+    peer_entity = ++entity_generator;
+  }
+
+  sim->peer_id[index] = peer;
+  sim->peer_data[index].owned = peer_entity;
+  sim->peer_data[index].Reset();
+}
+
+static void remove_peer(ss_simulation *sim, uint32_t index) {
+  sim->peer_id[index] = nullptr;
+  sim->peer_data[index].Reset();
+}
+
+static void step(serversim_t &sim, entityid_t entities[SIMSERVER_PEER_CAPACITY],
+                 siminput_t input[SIMSERVER_PEER_CAPACITY],
+                 uint32_t num_entities) {
   sim.head += 1;
   sim.frame_count += 1;
+
+  // store inputs for the next frame.
+  for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    sim.remote_entity[i] = entities[i];
+    sim.prev_input[i] = input[i];
+  }
 }
 
 void simserver_make_default(ss_config *config) {
@@ -52,10 +147,9 @@ void simserver_make_default(ss_config *config) {
 ss_simulation *simserver_create(ss_config *config) {
   ss_simulation *sim = new ss_simulation{};
 
-  sim->peer_count = 0;
   for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
     sim->peer_id[i] = nullptr;
-    sim->peer_data[i] = {};
+    sim->peer_data[i].Reset();
   }
 
   if(config) {
@@ -130,7 +224,8 @@ uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,
     const auto *msg = (const CommandMessage *)buffer;
 
     siminput_t input = {msg->m_buttons};
-    sim->peer_data[peer_idx].last_input = input;
+    sim->peer_data[peer_idx].input_buffer.PushBack(
+        ss_simulation::PeerData::FrameInput{msg->m_frame_id, input});
     return 0;
   }
   return -2;
@@ -144,16 +239,12 @@ void simserver_connection(uint32_t state, simpeer_t *peer, ss_simulation *sim) {
   if(state == SIMSERVER_STATE_PEER_CONNECTED) {
     uint32_t empty_idx = find_peer(sim, nullptr);
     if(empty_idx != -1) {
-      sim->peer_id[empty_idx] = peer;
-      sim->peer_data[empty_idx] = {};
-      sim->peer_count += 1;
+      add_peer(sim, empty_idx, peer);
     }
   } else if(state == SIMSERVER_STATE_PEER_DISCONNECTED) {
     uint32_t peer_idx = find_peer(sim, peer);
     if(peer_idx != -1) {
-      sim->peer_id[peer_idx] = nullptr;
-      sim->peer_data[peer_idx] = {};
-      sim->peer_count -= 1;
+      remove_peer(sim, peer_idx);
     }
   }
 }
@@ -166,8 +257,18 @@ void simserver_update(ss_simulation *sim) {
 
     sim->time_acc += dt;
     while(sim->time_acc >= sim->config.frame_duration) {
-      step(*sim->simulation);
+
+      entityid_t entities[SIMSERVER_PEER_CAPACITY];
+      siminput_t inputs[SIMSERVER_PEER_CAPACITY];
+
+      uint32_t num_remote_entities =
+          collect_input(sim, sim->simulation->head, entities, inputs);
+
+      step(*sim->simulation, entities, inputs, num_remote_entities);
+
       sim->time_acc -= sim->config.frame_duration;
+
+      remove_stale_input(sim);
     }
 
     sim->last_update_time = now;
@@ -178,11 +279,17 @@ int simserver_info(ss_simulation *sim, ss_info *info) {
   info->running = sim->simulation != nullptr;
   if(sim->simulation) {
     info->head = sim->simulation->head;
-    info->peer_count = sim->peer_count;
+    info->peer_count = peer_count(sim);
 
     for(int i = 0, j = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
       if(sim->peer_id[i] != nullptr) {
-        info->peer_id[j++] = sim->peer_id[i];
+        info->peer_id[j] = sim->peer_id[i];
+        info->remote_entity[j] = sim->peer_data[i].owned;
+        info->input_buffer_size[j] = sim->peer_data[i].input_buffer.Size();
+        info->buffer_size_log[j] = sim->peer_data[i].buffer_size_log.Begin();
+        info->buffer_size_log_size[j] =
+            sim->peer_data[i].buffer_size_log.Size();
+        j++;
       }
     }
   }
