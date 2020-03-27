@@ -61,8 +61,23 @@ struct ClientStateInfo {
 
 static ClientStateInfo netClientState;
 
+static bool IsKeyPressed(char k) {
+    assert(k >= 'a' && k <= 'z');
+    k = k - 'a' + 'A'; // this is how characters are mapped to key indices for k >= 'a' && k <= 'z'
+    ImGuiIO& io = ImGui::GetIO();
+    return ImGui::IsKeyPressed(k) || io.KeysDownDuration[k] >= 0.0f;
+}
+
 static void cli_get_input(simcmd_t* input) {
-    input->m_buttons = 0xabcd;
+    input->m_buttons = 0;
+
+    char chars[] = {'w', 's', 'a', 'd', 'n', 'm' };
+    uint32_t bits[] = { BUTTON_UP, BUTTON_DOWN, BUTTON_RIGHT, BUTTON_LEFT, BUTTON_A, BUTTON_B };
+    for(int i = 0; i < sizeof(chars) / sizeof(chars[0]); ++i) {
+        if(IsKeyPressed(chars[i])) {
+            input->m_buttons &= bits[i];
+        }
+    }
 }
 
 static void cli_state_update_func(int32_t state, void* user_data)
