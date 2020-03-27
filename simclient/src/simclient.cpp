@@ -9,15 +9,15 @@ struct simclient_t {
   frameid_t m_head;
 };
 
-void step(simclient_t *sim, siminput_t &input) { sim->m_head += 1; }
+void step(simclient_t *sim, simcmd_t &input) { sim->m_head += 1; }
 
 struct sc_simulation {
   sc_simulation() : m_offset_log(128), m_acceleration_log(128) {}
 
   simclient_t *m_simulation = nullptr;
 
-  siminput_t m_last_input;
-  void (*m_input_callback)(siminput_t *input);
+  simcmd_t m_last_input;
+  void (*m_input_callback)(simcmd_t *input);
 
   uint64_t m_last_update_time = 0;
   uint64_t m_frame_duration = 0;

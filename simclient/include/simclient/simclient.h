@@ -4,7 +4,7 @@
 struct sc_simulation;
 
 struct sc_config {
-  void (*input_callback)(siminput_t *input);
+  void (*input_callback)(simcmd_t *input);
 };
 
 sc_simulation *simclient_create(sc_config *config);

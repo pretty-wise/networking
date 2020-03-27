@@ -9,7 +9,7 @@ struct serversim_t {
   uint32_t frame_count;
 
   entityid_t remote_entity[SIMSERVER_PEER_CAPACITY];
-  siminput_t prev_input[SIMSERVER_PEER_CAPACITY];
+  simcmd_t prev_cmd[SIMSERVER_PEER_CAPACITY];
 };
 
 struct ss_simulation {
@@ -30,7 +30,7 @@ struct ss_simulation {
 
     struct FrameInput {
       frameid_t frame;
-      siminput_t input;
+      simcmd_t cmd;
     };
     CircularBuffer<FrameInput> input_buffer;
     CircularBuffer<float> buffer_size_log;
@@ -49,28 +49,28 @@ static uint32_t peer_count(ss_simulation *sim) {
   return count;
 }
 
-static uint32_t collect_input(ss_simulation *sim, frameid_t frame,
-                              entityid_t entities[SIMSERVER_PEER_CAPACITY],
-                              siminput_t input[SIMSERVER_PEER_CAPACITY]) {
+static uint32_t collect_cmds(ss_simulation *sim, frameid_t frame,
+                             entityid_t entities[SIMSERVER_PEER_CAPACITY],
+                             simcmd_t cmds[SIMSERVER_PEER_CAPACITY]) {
   uint32_t num_entities = 0;
   for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
     ss_simulation::PeerData &info = sim->peer_data[i];
     if(sim->peer_id[i] != nullptr && info.remote_entity != 0) {
       entities[num_entities] = info.remote_entity;
 
-      siminput_t peer_input = {};
+      simcmd_t peer_cmd = {};
 
       for(auto *it = info.input_buffer.Begin(); it != info.input_buffer.End();
           ++it) {
         if(it->frame == frame) {
-          peer_input = it->input;
+          peer_cmd = it->cmd;
         }
       }
 
       // todo(kstasik): if the input is not found duplicate the last available
       // input
 
-      input[num_entities] = peer_input;
+      cmds[num_entities] = peer_cmd;
       num_entities++;
     }
   }
@@ -126,15 +126,25 @@ static void remove_peer(ss_simulation *sim, uint32_t index) {
 }
 
 static void step(serversim_t &sim, entityid_t entities[SIMSERVER_PEER_CAPACITY],
-                 siminput_t input[SIMSERVER_PEER_CAPACITY],
+                 simcmd_t cmds[SIMSERVER_PEER_CAPACITY],
                  uint32_t num_entities) {
+
+  // create inputs
+  siminput_t inputs[SIMSERVER_PEER_CAPACITY];
+  for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    inputs[i].previous = {};
+    inputs[i].current = cmds[i];
+    if(sim.remote_entity[i] == entities[i])
+      inputs[i].previous = sim.prev_cmd[i];
+  }
+
   sim.head += 1;
   sim.frame_count += 1;
 
-  // store inputs for the next frame.
+  // store cmds for the next frame input
   for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
     sim.remote_entity[i] = entities[i];
-    sim.prev_input[i] = input[i];
+    sim.prev_cmd[i] = cmds[i];
   }
 }
 
@@ -223,9 +233,9 @@ uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,
     // todo(kstasik): read other data
     const auto *msg = (const CommandMessage *)buffer;
 
-    siminput_t input = {msg->m_buttons};
+    simcmd_t cmd = {msg->m_buttons};
     sim->peer_data[peer_idx].input_buffer.PushBack(
-        ss_simulation::PeerData::FrameInput{msg->m_frame_id, input});
+        ss_simulation::PeerData::FrameInput{msg->m_frame_id, cmd});
     return 0;
   }
   return -2;
@@ -259,12 +269,12 @@ void simserver_update(ss_simulation *sim) {
     while(sim->time_acc >= sim->config.frame_duration) {
 
       entityid_t entities[SIMSERVER_PEER_CAPACITY];
-      siminput_t inputs[SIMSERVER_PEER_CAPACITY];
+      simcmd_t commands[SIMSERVER_PEER_CAPACITY];
 
       uint32_t num_remote_entities =
-          collect_input(sim, sim->simulation->head, entities, inputs);
+          collect_cmds(sim, sim->simulation->head, entities, commands);
 
-      step(*sim->simulation, entities, inputs, num_remote_entities);
+      step(*sim->simulation, entities, commands, num_remote_entities);
 
       sim->time_acc -= sim->config.frame_duration;
 

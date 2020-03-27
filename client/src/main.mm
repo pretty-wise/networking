@@ -61,7 +61,7 @@ struct ClientStateInfo {
 
 static ClientStateInfo netClientState;
 
-static void cli_get_input(siminput_t* input) {
+static void cli_get_input(simcmd_t* input) {
     input->m_buttons = 0xabcd;
 }
 
@@ -74,7 +74,7 @@ static void cli_state_update_func(int32_t state, void* user_data)
         config.input_callback = cli_get_input;
         *info->simulation = simclient_create(&config);
     } else if(state == NETCLIENT_STATE_DISCONNECTED) {
-        delete *info->simulation;
+        simclient_destroy(*info->simulation);
         *info->simulation = nullptr;
     }
 
@@ -142,8 +142,8 @@ static int srv_recv_func(uint16_t id, const void *buffer, uint32_t nbytes, ns_en
 static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     ServerStateInfo* info = (ServerStateInfo*)user_data;
 
-    static_assert(NETSERVER_STATE_ENDPOINT_CONNECTED == SIMSERVER_STATE_PEER_CONNECTED);
-    static_assert(NETSERVER_STATE_ENDPOINT_DISCONNECTED == SIMSERVER_STATE_PEER_DISCONNECTED);
+    static_assert(NETSERVER_STATE_ENDPOINT_CONNECTED == SIMSERVER_STATE_PEER_CONNECTED, "");
+    static_assert(NETSERVER_STATE_ENDPOINT_DISCONNECTED == SIMSERVER_STATE_PEER_DISCONNECTED, "");
 
     simserver_connection(state, (simpeer_t*)e, info->simulation);
 
@@ -252,7 +252,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     ImGui::Begin("Debug Info");
 
     if(ImGui::CollapsingHeader("Server")) {
-        ImGui::Text("Connected Endpoints: %d", netServerState.endpoints.size());
+        ImGui::Text("Connected Endpoints: %lu", netServerState.endpoints.size());
         ImGui::Separator();
 
         for(int i = 0; i < netServerState.endpoints.size(); ++i) {
