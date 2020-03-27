@@ -26,7 +26,7 @@ struct ss_simulation {
       input_buffer.Clear();
       buffer_size_log.Clear();
     }
-    entityid_t owned = 0;
+    entityid_t remote_entity = 0;
 
     struct FrameInput {
       frameid_t frame;
@@ -55,8 +55,8 @@ static uint32_t collect_input(ss_simulation *sim, frameid_t frame,
   uint32_t num_entities = 0;
   for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
     ss_simulation::PeerData &info = sim->peer_data[i];
-    if(sim->peer_id[i] != nullptr && info.owned != 0) {
-      entities[num_entities] = info.owned;
+    if(sim->peer_id[i] != nullptr && info.remote_entity != 0) {
+      entities[num_entities] = info.remote_entity;
 
       siminput_t peer_input = {};
 
@@ -116,7 +116,7 @@ static void add_peer(ss_simulation *sim, uint32_t index, simpeer_t *peer) {
   }
 
   sim->peer_id[index] = peer;
-  sim->peer_data[index].owned = peer_entity;
+  sim->peer_data[index].remote_entity = peer_entity;
   sim->peer_data[index].Reset();
 }
 
@@ -284,7 +284,7 @@ int simserver_info(ss_simulation *sim, ss_info *info) {
     for(int i = 0, j = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
       if(sim->peer_id[i] != nullptr) {
         info->peer_id[j] = sim->peer_id[i];
-        info->remote_entity[j] = sim->peer_data[i].owned;
+        info->remote_entity[j] = sim->peer_data[i].remote_entity;
         info->input_buffer_size[j] = sim->peer_data[i].input_buffer.Size();
         info->buffer_size_log[j] = sim->peer_data[i].buffer_size_log.Begin();
         info->buffer_size_log_size[j] =
