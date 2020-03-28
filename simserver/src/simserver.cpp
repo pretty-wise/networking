@@ -49,6 +49,24 @@ static uint32_t peer_count(ss_simulation *sim) {
   return count;
 }
 
+static bool find_frame_cmd(ss_simulation::PeerData &info, frameid_t frame,
+                           simcmd_t *result) {
+  for(auto *it = info.input_buffer.Begin(); it != info.input_buffer.End();
+      ++it) {
+    if(it->frame == frame) {
+      *result = it->cmd;
+      return true;
+    }
+  }
+
+  // of the input is not found duplicate the last available
+  // input
+  if(info.input_buffer.Size() > 0) {
+    *result = (info.input_buffer.End() - 1)->cmd;
+  }
+  return false;
+}
+
 static uint32_t collect_cmds(ss_simulation *sim, frameid_t frame,
                              entityid_t entities[SIMSERVER_PEER_CAPACITY],
                              simcmd_t cmds[SIMSERVER_PEER_CAPACITY]) {
@@ -59,16 +77,9 @@ static uint32_t collect_cmds(ss_simulation *sim, frameid_t frame,
       entities[num_entities] = info.remote_entity;
 
       simcmd_t peer_cmd = {};
-
-      for(auto *it = info.input_buffer.Begin(); it != info.input_buffer.End();
-          ++it) {
-        if(it->frame == frame) {
-          peer_cmd = it->cmd;
-        }
+      if(!find_frame_cmd(info, frame, &peer_cmd)) {
+        // send feedback
       }
-
-      // todo(kstasik): if the input is not found duplicate the last available
-      // input
 
       cmds[num_entities] = peer_cmd;
       num_entities++;
@@ -77,7 +88,7 @@ static uint32_t collect_cmds(ss_simulation *sim, frameid_t frame,
   return num_entities;
 }
 
-static void remove_stale_input(ss_simulation *sim) {
+static void remove_stale_cmds(ss_simulation *sim) {
   for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
     if(sim->peer_id[i] == nullptr)
       continue;
@@ -87,7 +98,7 @@ static void remove_stale_input(ss_simulation *sim) {
 
     while(peer.input_buffer.Size() > 0) {
       auto *input = peer.input_buffer.Begin();
-      if(input->frame <= sim->simulation->head) {
+      if(input->frame < sim->simulation->head) {
         peer.input_buffer.PopFront(1);
       } else {
         break;
@@ -211,11 +222,15 @@ uint32_t simserver_write(uint16_t id, void *buffer, uint32_t nbytes,
     msg->m_start_time = sim->config.start_time;
     msg->m_frame_duration = sim->config.frame_duration;
     msg->m_start_frame = sim->config.start_frame;
+    uint32_t peer_idx = find_peer(sim, peer);
+    assert(peer_idx != -1);
+    msg->m_buffered_cmds = sim->peer_data[peer_idx].input_buffer.Size();
   } else {
     msg->m_frame_id = 0;
     msg->m_start_time = 0;
     msg->m_frame_duration = 0;
     msg->m_start_frame = 0;
+    msg->m_buffered_cmds = 0;
   }
 
   return sizeof(UpdateMessage);
@@ -230,8 +245,13 @@ uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,
     return -1;
 
   if(base->m_type == MessageType::Command) {
-    // todo(kstasik): read other data
+    if(!sim->simulation)
+      return 0;
+
     const auto *msg = (const CommandMessage *)buffer;
+    if(msg->m_frame_id < sim->simulation->head) {
+      return 0; // ignore stale input.
+    }
 
     simcmd_t cmd = {msg->m_buttons};
     sim->peer_data[peer_idx].input_buffer.PushBack(
@@ -278,7 +298,7 @@ void simserver_update(ss_simulation *sim) {
 
       sim->time_acc -= sim->config.frame_duration;
 
-      remove_stale_input(sim);
+      remove_stale_cmds(sim);
     }
 
     sim->last_update_time = now;

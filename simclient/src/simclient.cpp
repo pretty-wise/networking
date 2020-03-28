@@ -125,6 +125,17 @@ uint32_t simclient_read(sc_simulation *sim, uint16_t id, const void *buffer,
       }
       if(msg->m_frame_id > sim->m_acked_remote_frame) {
         sim->m_acked_remote_frame = msg->m_frame_id;
+
+        // adjustment of prediction offset based on server's feedback.
+        // this is a very simple implementation that can be easily improved.
+        // if server reports 0 cmds we extend prediction offset by delta.
+        // if server reports > 1 cmds we shrink prediction offset by delta.
+        const uint32_t delta = 1000;
+        if(msg->m_buffered_cmds == 0) {
+          sim->m_desired_predition_offset += delta;
+        } else if(msg->m_buffered_cmds > 1) {
+          sim->m_desired_predition_offset -= delta;
+        }
       } // else ignore out of order and duplicate packets
     } else {
       stop_simulation(sim);

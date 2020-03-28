@@ -25,4 +25,6 @@ struct UpdateMessage {
   uint64_t m_start_time;
   uint64_t m_frame_duration;
   uint64_t m_start_frame;
+
+  uint8_t m_buffered_cmds;
 };
