@@ -366,6 +366,16 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 for(int i = 0; i < info.peer_count; ++i) {
                     ImGui::BulletText("Id: %p", info.peer_id[i]);
                     ImGui::BulletText("Remote EntityId: %d", info.remote_entity[i]);
+                    ImGui::SameLine();
+                    if(info.remote_entity[i] != 0) {
+                        if(ImGui::Button("Destroy")) {
+                            simserver_entity_destroy(simServer, info.remote_entity[i]);
+                        }
+                    } else {
+                        if(ImGui::Button("Create")) {
+                            simserver_entity_create(simServer, info.peer_id[i]);
+                        }
+                    }
                     ImGui::BulletText("Input Buffer Size: %d", info.input_buffer_size[i]);
 
                     ImGui::PlotLines("Input Buffer", info.buffer_size_log[i], info.buffer_size_log_size[i], 0, NULL, 0, 10.f, ImVec2(0, 80));

@@ -47,3 +47,6 @@ struct ss_info {
 };
 
 int simserver_info(ss_simulation *sim, ss_info *info);
+
+entityid_t simserver_entity_create(ss_simulation *sim, simpeer_t *owner);
+int simserver_entity_destroy(ss_simulation *sim, entityid_t entity);

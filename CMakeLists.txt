@@ -104,6 +104,8 @@ add_library(simcommon STATIC
 	simcommon/include/simcommon/protocol.h
 	simcommon/include/simcommon/types.h
 	simcommon/src/types.cpp
+	simcommon/include/simcommon/simulation.h
+	simcommon/src/simulation.cpp
 )
 
 target_include_directories (simcommon PRIVATE src include)

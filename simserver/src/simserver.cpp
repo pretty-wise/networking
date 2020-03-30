@@ -1,15 +1,19 @@
 #include "simserver/simserver.h"
 #include "simcommon/protocol.h"
+#include "simcommon/simulation.h"
 #include "utils/circularbuffer.h"
 #include "utils/time.h"
 #include <assert.h>
 
 struct serversim_t {
   frameid_t head;
-  uint32_t frame_count;
 
-  entityid_t remote_entity[SIMSERVER_PEER_CAPACITY];
-  simcmd_t prev_cmd[SIMSERVER_PEER_CAPACITY];
+  entityid_t m_entity_id[SIMSERVER_ENTITY_CAPACITY];
+  entitymovement_t m_entity_movement[SIMSERVER_ENTITY_CAPACITY];
+  uint32_t m_entity_count;
+
+  entityid_t m_remote[SIMSERVER_PEER_CAPACITY];
+  simcmd_t m_prev_cmd[SIMSERVER_PEER_CAPACITY];
 };
 
 struct ss_simulation {
@@ -116,46 +120,124 @@ static uint32_t find_peer(ss_simulation *sim, simpeer_t *peer) {
   return -1;
 }
 
-static void add_peer(ss_simulation *sim, uint32_t index, simpeer_t *peer) {
+static uint32_t find_entity(serversim_t *sim, entityid_t id) {
+  for(uint32_t i = 0; i < SIMSERVER_ENTITY_CAPACITY; ++i) {
+    if(sim->m_entity_id[i] == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static entityid_t add_entity(serversim_t *sim) {
+  assert(sim != nullptr);
 
   static entityid_t entity_generator = 0;
 
   // generate entity for a joining peer
-  entityid_t peer_entity = 0;
-  while(peer_entity == 0) {
-    peer_entity = ++entity_generator;
+  entityid_t id = 0;
+  while(id == 0) {
+    id = ++entity_generator;
   }
 
+  uint32_t i = sim->m_entity_count;
+
+  sim->m_entity_id[i] = id;
+  sim->m_entity_movement[i] = {};
+  sim->m_entity_count++;
+  return id;
+}
+
+static void remove_entity(serversim_t *sim, entityid_t id) {
+  assert(id != 0);
+  assert(sim != nullptr);
+
+  uint32_t entity_idx = find_entity(sim, id);
+  if(entity_idx == -1)
+    return;
+
+  sim->m_entity_id[entity_idx] = 0;
+  sim->m_entity_movement[entity_idx] = {};
+  --sim->m_entity_count;
+}
+
+static entityid_t add_remote_entity(serversim_t *sim) {
+  entityid_t id = add_entity(sim);
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->m_remote[i] != 0) {
+      sim->m_remote[i] = id;
+      sim->m_prev_cmd[i] = {};
+      break;
+    }
+  }
+  return id;
+}
+
+static uint32_t find_entity_owner(serversim_t *sim, entityid_t id) {
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->m_remote[i] == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void remove_remote_entity(serversim_t *sim, entityid_t id) {
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->m_remote[i] == id) {
+      sim->m_remote[i] = 0;
+      sim->m_prev_cmd[i] = {};
+    }
+  }
+  remove_entity(sim, id);
+}
+
+static void add_peer(ss_simulation *sim, uint32_t index, simpeer_t *peer) {
+  entityid_t new_entity = add_remote_entity(sim->simulation);
+
   sim->peer_id[index] = peer;
-  sim->peer_data[index].remote_entity = peer_entity;
   sim->peer_data[index].Reset();
+  sim->peer_data[index].remote_entity = new_entity;
 }
 
 static void remove_peer(ss_simulation *sim, uint32_t index) {
-  sim->peer_id[index] = nullptr;
+  entityid_t entity_id = sim->peer_data[index].remote_entity;
+  remove_remote_entity(sim->simulation, entity_id);
   sim->peer_data[index].Reset();
+
+  sim->peer_id[index] = nullptr;
 }
 
-static void step(serversim_t &sim, entityid_t entities[SIMSERVER_PEER_CAPACITY],
-                 simcmd_t cmds[SIMSERVER_PEER_CAPACITY],
-                 uint32_t num_entities) {
+static void step_server_simulation(serversim_t *sim,
+                                   entityid_t entities[SIMSERVER_PEER_CAPACITY],
+                                   simcmd_t cmds[SIMSERVER_PEER_CAPACITY],
+                                   uint32_t num_entities) {
 
   // create inputs
   siminput_t inputs[SIMSERVER_PEER_CAPACITY];
   for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
     inputs[i].previous = {};
     inputs[i].current = cmds[i];
-    if(sim.remote_entity[i] == entities[i])
-      inputs[i].previous = sim.prev_cmd[i];
+    if(sim->m_remote[i] == entities[i])
+      inputs[i].previous = sim->m_prev_cmd[i];
   }
 
-  sim.head += 1;
-  sim.frame_count += 1;
+  sim->head += 1;
+
+  uint32_t remote_idx = 0;
+  while(entities[remote_idx] != 0) {
+    uint32_t idx = find_entity(sim, entities[remote_idx]);
+    if(idx != -1) {
+      entitymovement_t previous = sim->m_entity_movement[idx];
+      step_movement(sim->m_entity_movement[idx], previous, inputs[remote_idx]);
+    }
+    remote_idx++;
+  };
 
   // store cmds for the next frame input
   for(int i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
-    sim.remote_entity[i] = entities[i];
-    sim.prev_cmd[i] = cmds[i];
+    sim->m_remote[i] = entities[i];
+    sim->m_prev_cmd[i] = cmds[i];
   }
 }
 
@@ -288,13 +370,14 @@ void simserver_update(ss_simulation *sim) {
     sim->time_acc += dt;
     while(sim->time_acc >= sim->config.frame_duration) {
 
-      entityid_t entities[SIMSERVER_PEER_CAPACITY];
-      simcmd_t commands[SIMSERVER_PEER_CAPACITY];
+      entityid_t entities[SIMSERVER_PEER_CAPACITY] = {};
+      simcmd_t commands[SIMSERVER_PEER_CAPACITY] = {};
 
       uint32_t num_remote_entities =
           collect_cmds(sim, sim->simulation->head, entities, commands);
 
-      step(*sim->simulation, entities, commands, num_remote_entities);
+      step_server_simulation(sim->simulation, entities, commands,
+                             num_remote_entities);
 
       sim->time_acc -= sim->config.frame_duration;
 
@@ -323,5 +406,40 @@ int simserver_info(ss_simulation *sim, ss_info *info) {
       }
     }
   }
+  return 0;
+}
+
+entityid_t simserver_entity_create(ss_simulation *sim, simpeer_t *owner) {
+  if(!sim->simulation)
+    return 0; // no simulation running
+
+  if(!owner)
+    return 0; // for now only entities owned by peers are supported
+
+  uint32_t peer_idx = find_peer(sim, owner);
+  assert(peer_idx != -1);
+
+  auto &peer_data = sim->peer_data[peer_idx];
+
+  if(peer_data.remote_entity != 0) {
+    return 0; // peer already owns an entity. for now only one is supported
+  }
+
+  peer_data.remote_entity = add_remote_entity(sim->simulation);
+  return peer_data.remote_entity;
+}
+
+int simserver_entity_destroy(ss_simulation *sim, entityid_t entity) {
+  if(!sim->simulation)
+    return -1;
+
+  uint32_t peer_idx = find_entity_owner(sim->simulation, entity);
+  if(peer_idx != -1) {
+    remove_remote_entity(sim->simulation, entity);
+    sim->peer_data[peer_idx].remote_entity = 0;
+  } else {
+    remove_entity(sim->simulation, entity);
+  }
+
   return 0;
 }
