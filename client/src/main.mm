@@ -8,6 +8,7 @@
 #include "netserver/netserver.h"
 #include "netcommon/netsimulator.h"
 
+#include "simcommon/simulation.h"
 #include "simserver/simserver.h"
 #include "simclient/simclient.h"
 
@@ -72,10 +73,10 @@ static void cli_get_input(simcmd_t* input) {
     input->m_buttons = 0;
 
     char chars[] = {'w', 's', 'a', 'd', 'n', 'm' };
-    uint32_t bits[] = { BUTTON_UP, BUTTON_DOWN, BUTTON_RIGHT, BUTTON_LEFT, BUTTON_A, BUTTON_B };
+    uint32_t bits[] = { BUTTON_UP, BUTTON_DOWN, BUTTON_LEFT, BUTTON_RIGHT, BUTTON_A, BUTTON_B };
     for(int i = 0; i < sizeof(chars) / sizeof(chars[0]); ++i) {
         if(IsKeyPressed(chars[i])) {
-            input->m_buttons &= bits[i];
+            input->m_buttons |= bits[i];
         }
     }
 }
@@ -363,6 +364,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
 
                 ImGui::Text("Head: %d", info.head);
                 ImGui::Text("Peers: %d/%d", info.peer_count, SIMSERVER_PEER_CAPACITY);
+                ImGui::Separator();
                 for(int i = 0; i < info.peer_count; ++i) {
                     ImGui::BulletText("Id: %p", info.peer_id[i]);
                     ImGui::BulletText("Remote EntityId: %d", info.remote_entity[i]);
@@ -379,6 +381,16 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                     ImGui::BulletText("Input Buffer Size: %d", info.input_buffer_size[i]);
 
                     ImGui::PlotLines("Input Buffer", info.buffer_size_log[i], info.buffer_size_log_size[i], 0, NULL, 0, 10.f, ImVec2(0, 80));
+                }
+                entityid_t* ids = nullptr;
+                entitymovement_t* data = nullptr;
+                uint32_t count = 0;
+                if(0 == simserver_entity_movement(simServer, &ids, &data, &count)) {
+                    ImGui::Text("Entities: %d", count);
+                    ImGui::Separator();
+                    for(uint32_t i = 0; i < count; ++i) {
+                        ImGui::Text("%p: (%3f, %3f, %3f)", ids[i], data[i].m_pos[0], data[i].m_pos[1], data[i].m_pos[2]);
+                    }
                 }
             } else {
                 if(ImGui::Button("Start")) {

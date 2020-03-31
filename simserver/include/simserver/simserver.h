@@ -6,6 +6,7 @@
 #define SIMSERVER_PEER_CAPACITY 16
 
 struct ss_simulation;
+struct entitymovement_t;
 
 struct ss_config {
   uint32_t frame_duration;
@@ -50,3 +51,6 @@ int simserver_info(ss_simulation *sim, ss_info *info);
 
 entityid_t simserver_entity_create(ss_simulation *sim, simpeer_t *owner);
 int simserver_entity_destroy(ss_simulation *sim, entityid_t entity);
+
+int simserver_entity_movement(ss_simulation *sim, entityid_t **ids,
+                              entitymovement_t **data, uint32_t *count);

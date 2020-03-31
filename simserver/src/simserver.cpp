@@ -443,3 +443,18 @@ int simserver_entity_destroy(ss_simulation *sim, entityid_t entity) {
 
   return 0;
 }
+
+int simserver_entity_movement(ss_simulation *sim, entityid_t **ids,
+                              entitymovement_t **data, uint32_t *count) {
+  *count = 0;
+  if(!sim->simulation)
+    return -1;
+
+  *count = sim->simulation->m_entity_count;
+
+  if(*count > 0) {
+    *ids = sim->simulation->m_entity_id;
+    *data = sim->simulation->m_entity_movement;
+  }
+  return 0;
+}
