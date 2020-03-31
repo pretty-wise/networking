@@ -306,13 +306,19 @@ uint32_t simserver_write(uint16_t id, void *buffer, uint32_t nbytes,
     msg->m_start_frame = sim->config.start_frame;
     uint32_t peer_idx = find_peer(sim, peer);
     assert(peer_idx != -1);
-    msg->m_buffered_cmds = sim->peer_data[peer_idx].input_buffer.Size();
+    msg->m_cmdbuffer_size = sim->peer_data[peer_idx].input_buffer.Size();
+    msg->m_movement_count = sim->simulation->m_entity_count;
+    for(uint32_t i = 0; i < msg->m_movement_count; ++i) {
+      msg->m_entities[i] = sim->simulation->m_entity_id[i];
+      msg->m_movement[i] = sim->simulation->m_entity_movement[i];
+    }
   } else {
     msg->m_frame_id = 0;
     msg->m_start_time = 0;
     msg->m_frame_duration = 0;
     msg->m_start_frame = 0;
-    msg->m_buffered_cmds = 0;
+    msg->m_cmdbuffer_size = 0;
+    msg->m_movement_count = 0;
   }
 
   return sizeof(UpdateMessage);

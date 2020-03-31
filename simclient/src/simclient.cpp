@@ -5,16 +5,20 @@
 #include <assert.h>
 #include <math.h>
 
-struct simclient_t {
+struct clientsim_t {
   frameid_t m_head;
+
+  entityid_t m_entity_id[SIMSERVER_ENTITY_CAPACITY];
+  entitymovement_t m_entity_movement[SIMSERVER_ENTITY_CAPACITY];
+  uint32_t m_entity_count;
 };
 
-void step(simclient_t *sim, simcmd_t &input) { sim->m_head += 1; }
+void step(clientsim_t *sim, simcmd_t &input) { sim->m_head += 1; }
 
 struct sc_simulation {
   sc_simulation() : m_offset_log(128), m_acceleration_log(128) {}
 
-  simclient_t *m_simulation = nullptr;
+  clientsim_t *m_simulation = nullptr;
 
   simcmd_t m_last_input;
   void (*m_input_callback)(simcmd_t *input);
@@ -61,7 +65,7 @@ static void start_simulation(sc_simulation *sim, uint64_t start_time,
   // todo(kstasik): is this the right value to initialize?
   sim->m_acked_remote_frame = 0;
 
-  sim->m_simulation = new simclient_t;
+  sim->m_simulation = new clientsim_t{};
   sim->m_simulation->m_head = sim->m_remote_head;
   sim->m_local_sim_time_accumulator = sim->m_remote_sim_time_accumulator;
 }
@@ -115,9 +119,8 @@ uint32_t simclient_read(sc_simulation *sim, uint16_t id, const void *buffer,
 
   const auto *base = (const SimulationMessage *)buffer;
   if(base->m_type == MessageType::Update) {
-
-    // todo(kstasik): read other data
     const auto *msg = (const UpdateMessage *)buffer;
+
     if(msg->m_frame_duration > 0) {
       if(!sim->m_simulation) {
         start_simulation(sim, msg->m_start_time, msg->m_frame_duration,
@@ -126,14 +129,21 @@ uint32_t simclient_read(sc_simulation *sim, uint16_t id, const void *buffer,
       if(msg->m_frame_id > sim->m_acked_remote_frame) {
         sim->m_acked_remote_frame = msg->m_frame_id;
 
+        // read entity movement
+        sim->m_simulation->m_entity_count = msg->m_movement_count;
+        for(uint32_t i = 0; i < msg->m_movement_count; ++i) {
+          sim->m_simulation->m_entity_id[i] = msg->m_entities[i];
+          sim->m_simulation->m_entity_movement[i] = msg->m_movement[i];
+        }
+
         // adjustment of prediction offset based on server's feedback.
         // this is a very simple implementation that can be easily improved.
         // if server reports 0 cmds we extend prediction offset by delta.
         // if server reports > 1 cmds we shrink prediction offset by delta.
         const uint32_t delta = 1000;
-        if(msg->m_buffered_cmds == 0) {
+        if(msg->m_cmdbuffer_size == 0) {
           sim->m_desired_predition_offset += delta;
-        } else if(msg->m_buffered_cmds > 1) {
+        } else if(msg->m_cmdbuffer_size > 1) {
           sim->m_desired_predition_offset -= delta;
         }
       } // else ignore out of order and duplicate packets
@@ -233,6 +243,20 @@ int simclient_info(sc_simulation *sim, sc_info *info) {
     info->acceleration_log = sim->m_acceleration_log.Begin();
     info->offset_log = sim->m_offset_log.Begin();
     info->log_size = sim->m_offset_log.Size();
+  }
+  return 0;
+}
+
+int simclient_entity_movement(sc_simulation *sim, entityid_t **ids,
+                              entitymovement_t **data, uint32_t *count) {
+  *count = 0;
+  if(!sim->m_simulation)
+    return -1;
+
+  *count = sim->m_simulation->m_entity_count;
+  if(*count > 0) {
+    *ids = sim->m_simulation->m_entity_id;
+    *data = sim->m_simulation->m_entity_movement;
   }
   return 0;
 }

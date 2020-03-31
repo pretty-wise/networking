@@ -415,6 +415,17 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                     ImGui::PlotLines("Prediction Offset", info.offset_log, info.log_size, 0, NULL, 0.f, 100000.f, ImVec2(0, 80));
                     ImGui::PlotLines("Acceleration", info.acceleration_log, info.log_size, 0, NULL, -10000.f, 10000.f, ImVec2(0, 80));
                 }
+
+                entityid_t* ids = nullptr;
+                entitymovement_t* data = nullptr;
+                uint32_t count = 0;
+                if(0 == simclient_entity_movement(simClient, &ids, &data, &count)) {
+                    ImGui::Text("Entities: %d", count);
+                    ImGui::Separator();
+                    for(uint32_t i = 0; i < count; ++i) {
+                        ImGui::Text("%p: (%3f, %3f, %3f)", ids[i], data[i].m_pos[0], data[i].m_pos[1], data[i].m_pos[2]);
+                    }
+                }
             }
         }
     }

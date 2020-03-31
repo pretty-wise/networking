@@ -1,4 +1,5 @@
 #pragma once
+#include "simcommon/simulation.h"
 #include "simcommon/types.h"
 #include <cstdint>
 
@@ -26,5 +27,10 @@ struct UpdateMessage {
   uint64_t m_frame_duration;
   uint64_t m_start_frame;
 
-  uint8_t m_buffered_cmds;
+  uint8_t m_cmdbuffer_size;
+
+  // todo(kstasik): pack this better
+  uint32_t m_movement_count;
+  entityid_t m_entities[SIMSERVER_ENTITY_CAPACITY];
+  entitymovement_t m_movement[SIMSERVER_ENTITY_CAPACITY];
 };
