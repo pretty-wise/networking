@@ -1,8 +1,8 @@
 #pragma once
+#include "simcommon/simulation.h"
 #include "simcommon/types.h"
 
 struct sc_simulation;
-struct entitymovement_t;
 
 struct sc_config {
   void (*input_callback)(simcmd_t *input);
@@ -38,5 +38,12 @@ struct sc_info {
 
 int simclient_info(sc_simulation *sim, sc_info *info);
 
+struct entityinfo_t {
+  entitymovement_t movement;
+  frameid_t confirmed;
+  frameid_t predicted;
+  frameid_t last_error;
+};
+
 int simclient_entity_movement(sc_simulation *sim, entityid_t **ids,
-                              entitymovement_t **data, uint32_t *count);
+                              entityinfo_t **data, uint32_t *count);

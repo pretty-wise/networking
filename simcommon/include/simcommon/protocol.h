@@ -21,6 +21,7 @@ struct CommandMessage {
 struct UpdateMessage {
   MessageType m_type;
   frameid_t m_frame_id;
+
   // todo(kstasik): avoid sending 3 configuration values
   // in every update
   uint64_t m_start_time;
@@ -28,6 +29,14 @@ struct UpdateMessage {
   uint64_t m_start_frame;
 
   uint8_t m_cmdbuffer_size;
+
+  // todo(kstasik): improved entity creation needed here.
+  // for now one client can control only one entity. and the id of this entity
+  // is sent every frame. I need to add support for multiple entities and avoid
+  // sending the ids of those entities in every frame.
+  // or maybe simply always allow just one local entity and send this
+  // information along with simulation configuration
+  entityid_t m_local_entity;
 
   // todo(kstasik): pack this better
   uint32_t m_movement_count;

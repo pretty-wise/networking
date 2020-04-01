@@ -393,9 +393,17 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                     }
                 }
             } else {
+                static ss_config config;
+                static bool first = false;
+                if(!first) {
+                simserver_make_default(&config);
+                    first = true;
+                }
+                static int speed_index = 0;
+                static const char* items[] = {"32ms", "1000ms"};
+                ImGui::Combo("Frame Duration", &speed_index, items, IM_ARRAYSIZE(items));
+                config.frame_duration = speed_index == 0 ? 32000 : 1000000;
                 if(ImGui::Button("Start")) {
-                    ss_config config;
-                    simserver_make_default(&config);
                     simserver_start(simServer, &config);
                 }
             }
@@ -417,13 +425,15 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 }
 
                 entityid_t* ids = nullptr;
-                entitymovement_t* data = nullptr;
+                entityinfo_t* data = nullptr;
                 uint32_t count = 0;
                 if(0 == simclient_entity_movement(simClient, &ids, &data, &count)) {
                     ImGui::Text("Entities: %d", count);
                     ImGui::Separator();
                     for(uint32_t i = 0; i < count; ++i) {
-                        ImGui::Text("%p: (%3f, %3f, %3f)", ids[i], data[i].m_pos[0], data[i].m_pos[1], data[i].m_pos[2]);
+                        ImGui::Text("%p: confirmed: %d. predicted: %d. last error: %d. (%3f, %3f, %3f)", ids[i], 
+                        data[i].confirmed, data[i].predicted, data[i].last_error,
+                        data[i].movement.m_pos[0], data[i].movement.m_pos[1], data[i].movement.m_pos[2]);
                     }
                 }
             }

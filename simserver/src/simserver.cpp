@@ -6,7 +6,8 @@
 #include <assert.h>
 
 struct serversim_t {
-  frameid_t head;
+  // last executed frame id.
+  frameid_t m_head;
 
   entityid_t m_entity_id[SIMSERVER_ENTITY_CAPACITY];
   entitymovement_t m_entity_movement[SIMSERVER_ENTITY_CAPACITY];
@@ -24,19 +25,19 @@ struct ss_simulation {
   uint64_t time_acc;
 
   struct PeerData {
-    PeerData() : input_buffer(128), buffer_size_log(128) {}
+    PeerData() : command_buffer(128), buffer_size_log(128) {}
 
     void Reset() {
-      input_buffer.Clear();
+      command_buffer.Clear();
       buffer_size_log.Clear();
     }
     entityid_t remote_entity = 0;
 
-    struct FrameInput {
+    struct CommandFrame {
       frameid_t frame;
       simcmd_t cmd;
     };
-    CircularBuffer<FrameInput> input_buffer;
+    CircularBuffer<CommandFrame> command_buffer;
     CircularBuffer<float> buffer_size_log;
   };
 
@@ -55,7 +56,7 @@ static uint32_t peer_count(ss_simulation *sim) {
 
 static bool find_frame_cmd(ss_simulation::PeerData &info, frameid_t frame,
                            simcmd_t *result) {
-  for(auto *it = info.input_buffer.Begin(); it != info.input_buffer.End();
+  for(auto *it = info.command_buffer.Begin(); it != info.command_buffer.End();
       ++it) {
     if(it->frame == frame) {
       *result = it->cmd;
@@ -65,8 +66,8 @@ static bool find_frame_cmd(ss_simulation::PeerData &info, frameid_t frame,
 
   // of the input is not found duplicate the last available
   // input
-  if(info.input_buffer.Size() > 0) {
-    *result = (info.input_buffer.End() - 1)->cmd;
+  if(info.command_buffer.Size() > 0) {
+    *result = (info.command_buffer.End() - 1)->cmd;
   }
   return false;
 }
@@ -98,12 +99,12 @@ static void remove_stale_cmds(ss_simulation *sim) {
       continue;
 
     auto &peer = sim->peer_data[i];
-    peer.buffer_size_log.PushBack((float)peer.input_buffer.Size());
+    peer.buffer_size_log.PushBack((float)peer.command_buffer.Size());
 
-    while(peer.input_buffer.Size() > 0) {
-      auto *input = peer.input_buffer.Begin();
-      if(input->frame < sim->simulation->head) {
-        peer.input_buffer.PopFront(1);
+    while(peer.command_buffer.Size() > 0) {
+      auto *input = peer.command_buffer.Begin();
+      if(input->frame <= sim->simulation->m_head) {
+        peer.command_buffer.PopFront(1);
       } else {
         break;
       }
@@ -222,7 +223,7 @@ static void step_server_simulation(serversim_t *sim,
       inputs[i].previous = sim->m_prev_cmd[i];
   }
 
-  sim->head += 1;
+  frameid_t frame = (sim->m_head += 1);
 
   uint32_t remote_idx = 0;
   while(entities[remote_idx] != 0) {
@@ -242,7 +243,7 @@ static void step_server_simulation(serversim_t *sim,
 }
 
 void simserver_make_default(ss_config *config) {
-  config->frame_duration = 32 * 1000;
+  config->frame_duration = 1000 * 1000;
   config->start_frame = 0;
   config->start_time = get_time_us();
 }
@@ -278,10 +279,17 @@ int simserver_start(ss_simulation *sim, ss_config *config) {
     sim->config = *config;
 
   sim->simulation = new serversim_t{};
-  sim->simulation->head = sim->config.start_frame;
+  sim->simulation->m_head = sim->config.start_frame;
 
   sim->last_update_time = sim->config.start_time;
   sim->time_acc = 0;
+
+  for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
+    if(sim->peer_id[i] != nullptr) {
+      entityid_t new_entity = add_remote_entity(sim->simulation);
+      sim->peer_data[i].remote_entity = new_entity;
+    }
+  }
 
   return 0;
 }
@@ -300,13 +308,14 @@ uint32_t simserver_write(uint16_t id, void *buffer, uint32_t nbytes,
   auto *msg = (UpdateMessage *)buffer;
   msg->m_type = MessageType::Update;
   if(sim->simulation) {
-    msg->m_frame_id = sim->simulation->head;
+    msg->m_frame_id = sim->simulation->m_head;
     msg->m_start_time = sim->config.start_time;
     msg->m_frame_duration = sim->config.frame_duration;
     msg->m_start_frame = sim->config.start_frame;
     uint32_t peer_idx = find_peer(sim, peer);
     assert(peer_idx != -1);
-    msg->m_cmdbuffer_size = sim->peer_data[peer_idx].input_buffer.Size();
+    msg->m_cmdbuffer_size = sim->peer_data[peer_idx].command_buffer.Size();
+    msg->m_local_entity = sim->peer_data[peer_idx].remote_entity;
     msg->m_movement_count = sim->simulation->m_entity_count;
     for(uint32_t i = 0; i < msg->m_movement_count; ++i) {
       msg->m_entities[i] = sim->simulation->m_entity_id[i];
@@ -337,13 +346,25 @@ uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,
       return 0;
 
     const auto *msg = (const CommandMessage *)buffer;
-    if(msg->m_frame_id < sim->simulation->head) {
+    if(msg->m_frame_id <= sim->simulation->m_head) {
       return 0; // ignore stale input.
     }
 
+    auto &peer_data = sim->peer_data[peer_idx];
+
+    bool already_received =
+        peer_data.command_buffer.Size() > 0 &&
+        msg->m_frame_id <= (*(peer_data.command_buffer.End() - 1)).frame;
+    if(already_received) {
+      // here, we don't fill in input gaps and only accept the most recent input
+      // a better way would be to fill in those gaps and the peer should send
+      // multiple frames of input in one packet to reduce the number of lost
+      // ocmmand frames.
+      return 0;
+    }
     simcmd_t cmd = {msg->m_buttons};
-    sim->peer_data[peer_idx].input_buffer.PushBack(
-        ss_simulation::PeerData::FrameInput{msg->m_frame_id, cmd});
+    peer_data.command_buffer.PushBack(
+        ss_simulation::PeerData::CommandFrame{msg->m_frame_id, cmd});
     return 0;
   }
   return -2;
@@ -380,7 +401,7 @@ void simserver_update(ss_simulation *sim) {
       simcmd_t commands[SIMSERVER_PEER_CAPACITY] = {};
 
       uint32_t num_remote_entities =
-          collect_cmds(sim, sim->simulation->head, entities, commands);
+          collect_cmds(sim, sim->simulation->m_head + 1, entities, commands);
 
       step_server_simulation(sim->simulation, entities, commands,
                              num_remote_entities);
@@ -397,14 +418,14 @@ void simserver_update(ss_simulation *sim) {
 int simserver_info(ss_simulation *sim, ss_info *info) {
   info->running = sim->simulation != nullptr;
   if(sim->simulation) {
-    info->head = sim->simulation->head;
+    info->head = sim->simulation->m_head;
     info->peer_count = peer_count(sim);
 
     for(int i = 0, j = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
       if(sim->peer_id[i] != nullptr) {
         info->peer_id[j] = sim->peer_id[i];
         info->remote_entity[j] = sim->peer_data[i].remote_entity;
-        info->input_buffer_size[j] = sim->peer_data[i].input_buffer.Size();
+        info->input_buffer_size[j] = sim->peer_data[i].command_buffer.Size();
         info->buffer_size_log[j] = sim->peer_data[i].buffer_size_log.Begin();
         info->buffer_size_log_size[j] =
             sim->peer_data[i].buffer_size_log.Size();
