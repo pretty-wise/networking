@@ -5,22 +5,37 @@
 #include <assert.h>
 #include <math.h>
 
+struct entitydata_t {
+  frameid_t m_current;
+  entitymovement_t m_movement;
+};
+
 struct clientsim_t {
+  // this is the latest frame id received. this should be removed as each
+  // entitydata_t has its own frame id
   frameid_t m_head;
 
   entityid_t m_entity_id[SIMSERVER_ENTITY_CAPACITY];
-  entitymovement_t m_entity_movement[SIMSERVER_ENTITY_CAPACITY];
+  entitydata_t m_entity_data[SIMSERVER_ENTITY_CAPACITY];
   uint32_t m_entity_count;
 };
 
-void step(clientsim_t *sim, simcmd_t &input) { sim->m_head += 1; }
+void step_client_simulation(clientsim_t *sim, simcmd_t &input) {
+  sim->m_head += 1;
+}
 
 struct sc_simulation {
-  sc_simulation() : m_offset_log(128), m_acceleration_log(128) {}
+  sc_simulation()
+      : m_offset_log(128), m_acceleration_log(128), m_cmd_log(128) {}
 
   clientsim_t *m_simulation = nullptr;
 
-  simcmd_t m_last_input;
+  struct FrameInput {
+    frameid_t frame;
+    simcmd_t cmd;
+  };
+
+  CircularBuffer<simcmd_t> m_cmd_log; // last entry is of sim->m_head
   void (*m_input_callback)(simcmd_t *input);
 
   uint64_t m_last_update_time = 0;
@@ -67,6 +82,8 @@ static void start_simulation(sc_simulation *sim, uint64_t start_time,
 
   sim->m_simulation = new clientsim_t{};
   sim->m_simulation->m_head = sim->m_remote_head;
+  // push empty command to be able to send something to the server
+  sim->m_cmd_log.PushBack(simcmd_t{});
   sim->m_local_sim_time_accumulator = sim->m_remote_sim_time_accumulator;
 }
 
@@ -107,7 +124,9 @@ uint32_t simclient_write(sc_simulation *sim, uint16_t id, void *buffer,
   msg->m_type = MessageType::Command;
   if(sim->m_simulation) {
     msg->m_frame_id = sim->m_simulation->m_head;
-    msg->m_buttons = sim->m_last_input.m_buttons;
+    assert(sim->m_cmd_log.Size() > 0);
+    simcmd_t last_cmd = *(sim->m_cmd_log.End() - 1);
+    msg->m_buttons = last_cmd.m_buttons;
   }
   return sizeof(CommandMessage);
 }
@@ -133,7 +152,8 @@ uint32_t simclient_read(sc_simulation *sim, uint16_t id, const void *buffer,
         sim->m_simulation->m_entity_count = msg->m_movement_count;
         for(uint32_t i = 0; i < msg->m_movement_count; ++i) {
           sim->m_simulation->m_entity_id[i] = msg->m_entities[i];
-          sim->m_simulation->m_entity_movement[i] = msg->m_movement[i];
+          sim->m_simulation->m_entity_data[i].m_current = msg->m_frame_id;
+          sim->m_simulation->m_entity_data[i].m_movement = msg->m_movement[i];
         }
 
         // adjustment of prediction offset based on server's feedback.
@@ -199,7 +219,8 @@ void simclient_update(sc_simulation *sim) {
 
     // step local simulation
     {
-      sim->m_input_callback(&sim->m_last_input);
+      simcmd_t cmd;
+      sim->m_input_callback(&cmd);
 
       sim->m_local_sim_time_accumulator += dt;
 
@@ -210,7 +231,8 @@ void simclient_update(sc_simulation *sim) {
         if(sim->m_local_sim_time_accumulator < frame_duration)
           break;
 
-        step(sim->m_simulation, sim->m_last_input);
+        step_client_simulation(sim->m_simulation, cmd);
+        sim->m_cmd_log.PushBack(cmd);
 
         sim->m_offset_log.PushBack((float)sim->m_predition_offset);
         sim->m_acceleration_log.PushBack((float)sim->m_acceleration);
@@ -253,10 +275,18 @@ int simclient_entity_movement(sc_simulation *sim, entityid_t **ids,
   if(!sim->m_simulation)
     return -1;
 
+  // this is a temporary solution to only return movement data.
+  // the api needs to be improved and probably returned more details than just
+  // movement
+  static entitymovement_t transfer_buffer[SIMSERVER_ENTITY_CAPACITY];
+
   *count = sim->m_simulation->m_entity_count;
   if(*count > 0) {
     *ids = sim->m_simulation->m_entity_id;
-    *data = sim->m_simulation->m_entity_movement;
+    for(uint32_t i = 0; i < sim->m_simulation->m_entity_count; ++i) {
+      transfer_buffer[i] = sim->m_simulation->m_entity_data[i].m_movement;
+    }
+    *data = transfer_buffer;
   }
   return 0;
 }
