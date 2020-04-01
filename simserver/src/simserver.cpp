@@ -6,7 +6,6 @@
 #include <assert.h>
 
 struct serversim_t {
-  // last executed frame id.
   frameid_t m_head;
 
   entityid_t m_entity_id[SIMSERVER_ENTITY_CAPACITY];
