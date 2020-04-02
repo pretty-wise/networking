@@ -53,11 +53,6 @@ struct sc_simulation {
 
   clientsim_t *m_simulation = nullptr;
 
-  struct FrameInput {
-    frameid_t frame;
-    simcmd_t cmd;
-  };
-
   CircularBuffer<simcmd_t> m_cmd_log; // last entry is of sim->m_local_head
   void (*m_input_callback)(simcmd_t *input);
 

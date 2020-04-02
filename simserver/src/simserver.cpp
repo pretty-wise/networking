@@ -16,6 +16,23 @@ struct serversim_t {
   simcmd_t m_prev_cmd[SIMSERVER_PEER_CAPACITY];
 };
 
+struct commandframe_t {
+  frameid_t frame;
+  simcmd_t cmd;
+};
+
+struct peerdata_t {
+  peerdata_t() : command_buffer(128), buffer_size_log(128) {}
+
+  void Reset() {
+    command_buffer.Clear();
+    buffer_size_log.Clear();
+  }
+  entityid_t remote_entity = 0;
+  CircularBuffer<commandframe_t> command_buffer;
+  CircularBuffer<float> buffer_size_log;
+};
+
 struct ss_simulation {
   ss_config config;
 
@@ -23,25 +40,8 @@ struct ss_simulation {
   uint64_t last_update_time;
   uint64_t time_acc;
 
-  struct PeerData {
-    PeerData() : command_buffer(128), buffer_size_log(128) {}
-
-    void Reset() {
-      command_buffer.Clear();
-      buffer_size_log.Clear();
-    }
-    entityid_t remote_entity = 0;
-
-    struct CommandFrame {
-      frameid_t frame;
-      simcmd_t cmd;
-    };
-    CircularBuffer<CommandFrame> command_buffer;
-    CircularBuffer<float> buffer_size_log;
-  };
-
   simpeer_t *peer_id[SIMSERVER_PEER_CAPACITY];
-  PeerData peer_data[SIMSERVER_PEER_CAPACITY];
+  peerdata_t peer_data[SIMSERVER_PEER_CAPACITY];
 };
 
 static uint32_t peer_count(ss_simulation *sim) {
@@ -53,7 +53,7 @@ static uint32_t peer_count(ss_simulation *sim) {
   return count;
 }
 
-static bool find_frame_cmd(ss_simulation::PeerData &info, frameid_t frame,
+static bool find_frame_cmd(peerdata_t &info, frameid_t frame,
                            simcmd_t *result) {
   for(auto *it = info.command_buffer.Begin(); it != info.command_buffer.End();
       ++it) {
@@ -76,7 +76,7 @@ static uint32_t collect_cmds(ss_simulation *sim, frameid_t frame,
                              simcmd_t cmds[SIMSERVER_PEER_CAPACITY]) {
   uint32_t num_entities = 0;
   for(uint32_t i = 0; i < SIMSERVER_PEER_CAPACITY; ++i) {
-    ss_simulation::PeerData &info = sim->peer_data[i];
+    peerdata_t &info = sim->peer_data[i];
     if(sim->peer_id[i] != nullptr && info.remote_entity != 0) {
       entities[num_entities] = info.remote_entity;
 
@@ -362,8 +362,7 @@ uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,
       return 0;
     }
     simcmd_t cmd = {msg->m_buttons};
-    peer_data.command_buffer.PushBack(
-        ss_simulation::PeerData::CommandFrame{msg->m_frame_id, cmd});
+    peer_data.command_buffer.PushBack(commandframe_t{msg->m_frame_id, cmd});
     return 0;
   }
   return -2;
