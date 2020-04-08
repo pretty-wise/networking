@@ -29,6 +29,7 @@ struct peerdata_t {
     buffer_size_log.Clear();
   }
   entityid_t remote_entity = 0;
+  uint32_t last_entity_write_index = 0;
   CircularBuffer<commandframe_t> command_buffer;
   CircularBuffer<float> buffer_size_log;
 };
@@ -306,30 +307,50 @@ uint32_t simserver_write(uint16_t id, void *buffer, uint32_t nbytes,
   assert(sizeof(UpdateMessage) <= nbytes);
   auto *msg = (UpdateMessage *)buffer;
   msg->m_type = MessageType::Update;
-  if(sim->simulation) {
-    msg->m_frame_id = sim->simulation->m_head;
-    msg->m_start_time = sim->config.start_time;
-    msg->m_frame_duration = sim->config.frame_duration;
-    msg->m_start_frame = sim->config.start_frame;
-    uint32_t peer_idx = find_peer(sim, peer);
-    assert(peer_idx != -1);
-    msg->m_cmdbuffer_size = sim->peer_data[peer_idx].command_buffer.Size();
-    msg->m_local_entity = sim->peer_data[peer_idx].remote_entity;
-    msg->m_movement_count = sim->simulation->m_entity_count;
-    for(uint32_t i = 0; i < msg->m_movement_count; ++i) {
-      msg->m_entities[i] = sim->simulation->m_entity_id[i];
-      msg->m_movement[i] = sim->simulation->m_entity_movement[i];
-    }
-  } else {
+
+  if(!sim->simulation) {
     msg->m_frame_id = 0;
     msg->m_start_time = 0;
     msg->m_frame_duration = 0;
     msg->m_start_frame = 0;
     msg->m_cmdbuffer_size = 0;
-    msg->m_movement_count = 0;
+    msg->m_entity_count = 0;
+    return sizeof(UpdateMessage);
   }
 
-  return sizeof(UpdateMessage);
+  msg->m_frame_id = sim->simulation->m_head;
+  msg->m_start_time = sim->config.start_time;
+  msg->m_frame_duration = sim->config.frame_duration;
+  msg->m_start_frame = sim->config.start_frame;
+  uint32_t peer_idx = find_peer(sim, peer);
+  assert(peer_idx != -1);
+  auto &peer_data = sim->peer_data[peer_idx];
+  msg->m_cmdbuffer_size = peer_data.command_buffer.Size();
+  msg->m_local_entity = peer_data.remote_entity;
+  msg->m_entity_count =
+      sim->simulation->m_entity_count > UpdateMessage::MAX_ENTITY_COUNT
+          ? UpdateMessage::MAX_ENTITY_COUNT
+          : sim->simulation->m_entity_count;
+
+  for(uint32_t count = 0; count < msg->m_entity_count;) {
+    uint32_t eidx = peer_data.last_entity_write_index;
+    entityid_t entity_id = sim->simulation->m_entity_id[eidx];
+    if(entity_id != 0) {
+      auto *entity_update =
+          (EntityUpdate *)((uint8_t *)buffer + sizeof(UpdateMessage) +
+                           count * sizeof(EntityUpdate));
+
+      entity_update->m_id = entity_id;
+      entity_update->m_movement = sim->simulation->m_entity_movement[eidx];
+
+      ++count;
+    }
+
+    if(++eidx >= SIMSERVER_ENTITY_CAPACITY)
+      peer_data.last_entity_write_index = 0;
+  }
+
+  return sizeof(UpdateMessage) + msg->m_entity_count * sizeof(EntityUpdate);
 }
 
 uint32_t simserver_read(uint16_t id, const void *buffer, uint32_t nbytes,

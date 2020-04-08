@@ -34,6 +34,20 @@ static uint32_t find_entity(clientsim_t *sim, entityid_t id) {
   return -1;
 }
 
+static uint32_t add_entity(clientsim_t *sim, entityid_t id) {
+  assert(id != 0);
+
+  for(uint32_t i = 0; i < SIMSERVER_ENTITY_CAPACITY; ++i) {
+    if(sim->m_entity_id[i] == 0) {
+      sim->m_entity_id[i] = id;
+      sim->m_entity_data[i] = {};
+      ++sim->m_entity_count;
+      return i;
+    }
+  }
+  return -1;
+}
+
 void step_client_simulation(clientsim_t *sim, siminput_t &input) {
   frameid_t frame = (sim->m_local_head += 1);
 
@@ -170,20 +184,36 @@ uint32_t simclient_read(sc_simulation *sim, uint16_t id, const void *buffer,
 
         sim->m_simulation->m_local_entity = msg->m_local_entity;
 
-        // read entity movement
-        sim->m_simulation->m_entity_count = msg->m_movement_count;
-        for(uint32_t i = 0; i < msg->m_movement_count; ++i) {
-          auto &entity_data = sim->m_simulation->m_entity_data[i];
-          sim->m_simulation->m_entity_id[i] = msg->m_entities[i];
-          if(sim->m_simulation->m_entity_id[i] ==
-             sim->m_simulation->m_local_entity) {
+        // read entities
+        for(uint32_t i = 0; i < msg->m_entity_count; ++i) {
+          auto *entity_update =
+              (EntityUpdate *)((uint8_t *)buffer + sizeof(UpdateMessage) +
+                               i * sizeof(EntityUpdate));
 
-            entitymovement_t predicted = entity_data.m_movement;
+          uint32_t eidx = find_entity(sim->m_simulation, entity_update->m_id);
+          if(eidx == -1) {
+            eidx = add_entity(sim->m_simulation, entity_update->m_id);
+          }
+
+          assert(eidx != -1); // entity limit reached. this could happen if we
+                              // have stale entities that we were not notified
+                              // about destruction of just yet. this case needs
+                              // to be supported.
+
+          if(eidx == -1)
+            return 0;
+
+          auto &entity_data = sim->m_simulation->m_entity_data[eidx];
+
+          if(sim->m_simulation->m_entity_id[eidx] ==
+             sim->m_simulation->m_local_entity) {
             //
             // for local entity for now we apply the local state and resimulate
             // to the predicted frame
             //
-            entity_data.m_movement = msg->m_movement[i];
+            entitymovement_t predicted = entity_data.m_movement;
+
+            entity_data.m_movement = entity_update->m_movement;
             entity_data.m_current = msg->m_frame_id;
             entity_data.m_predicted = sim->m_simulation->m_local_head;
 
@@ -208,7 +238,7 @@ uint32_t simclient_read(sc_simulation *sim, uint16_t id, const void *buffer,
             //
             entity_data.m_current = msg->m_frame_id;
             entity_data.m_predicted = msg->m_frame_id;
-            entity_data.m_movement = msg->m_movement[i];
+            entity_data.m_movement = entity_update->m_movement;
           }
         }
 

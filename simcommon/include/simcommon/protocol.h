@@ -19,6 +19,8 @@ struct CommandMessage {
 };
 
 struct UpdateMessage {
+  static const uint32_t MAX_ENTITY_COUNT = 4;
+
   MessageType m_type;
   frameid_t m_frame_id;
 
@@ -38,8 +40,10 @@ struct UpdateMessage {
   // information along with simulation configuration
   entityid_t m_local_entity;
 
-  // todo(kstasik): pack this better
-  uint32_t m_movement_count;
-  entityid_t m_entities[SIMSERVER_ENTITY_CAPACITY];
-  entitymovement_t m_movement[SIMSERVER_ENTITY_CAPACITY];
+  uint32_t m_entity_count;
+};
+
+struct EntityUpdate {
+  entityid_t m_id;
+  entitymovement_t m_movement;
 };
