@@ -389,7 +389,14 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                     ImGui::Text("Entities: %d", count);
                     ImGui::Separator();
                     for(uint32_t i = 0; i < count; ++i) {
-                        ImGui::Text("%p: (%3f, %3f, %3f)", ids[i], data[i].m_pos[0], data[i].m_pos[1], data[i].m_pos[2]);
+                        ImGui::Text("Entity '%p': (%3f, %3f, %3f)", ids[i], data[i].m_pos[0], data[i].m_pos[1], data[i].m_pos[2]);
+                        ss_script_info scriptInfo;
+                        if(0 == simserver_entity_script(simServer, &scriptInfo, ids[i]) && scriptInfo.count > 0)
+                        {
+                            ImGui::Text("Scripts (%d):", scriptInfo.count);
+                            for(uint32_t i = 0; i < scriptInfo.count; ++i)
+                                ImGui::BulletText("Script %d (Id: %d)", scriptInfo.guid[i], scriptInfo.id[i]);
+                        }
                     }
                 }
             } else {
@@ -417,7 +424,7 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                 ImGui::Text("Local Head: %d", info.local_head);
                 ImGui::Text("Remote Head: %d", info.remote_head);
                 ImGui::Text("Acked Frame: %d", info.acked_frame);
-                ImGui::Text("Prediction Offset: %lldus (%lldus +%lldus)", info.desired_offset, info.prediction_offset, info.prediction_acceleration);
+                ImGui::Text("Prediction Offset: %lldus (%lldus +%lldus) Acked Frame Offset: %d Remote Frame Offset: %d", info.desired_offset, info.prediction_offset, info.prediction_acceleration, info.local_head - info.acked_frame, info.local_head - info.remote_head);
 
                 if(info.log_size > 0) {
                     ImGui::PlotLines("Prediction Offset", info.offset_log, info.log_size, 0, NULL, 0.f, 100000.f, ImVec2(0, 80));
@@ -431,9 +438,20 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
                     ImGui::Text("Entities: %d", count);
                     ImGui::Separator();
                     for(uint32_t i = 0; i < count; ++i) {
-                        ImGui::Text("%p: confirmed: %d. predicted: %d. last error: %d. (%3f, %3f, %3f)", ids[i], 
-                        data[i].confirmed, data[i].predicted, data[i].last_error,
-                        data[i].movement.m_pos[0], data[i].movement.m_pos[1], data[i].movement.m_pos[2]);
+                        ImGui::Text("%p: confirmed: %d(%3f, %3f, %3f). predicted: %d(%3f, %3f, %3f). last error: %d.", ids[i], 
+                        data[i].confirmed,
+                        data[i].movement_confirmed.m_pos[0], data[i].movement_confirmed.m_pos[1], data[i].movement_confirmed.m_pos[2], 
+                        data[i].predicted, 
+                        data[i].movement_predicted.m_pos[0], data[i].movement_predicted.m_pos[1], data[i].movement_predicted.m_pos[2], 
+                        data[i].last_error);
+
+                        sc_script_info scriptInfo;
+                        if(0 == simclient_entity_script(simClient, &scriptInfo, ids[i]) && scriptInfo.count > 0)
+                        {
+                            ImGui::Text("Scripts (%d) confirmed :%d, last sampled: %d:", scriptInfo.count, scriptInfo.last_changed, scriptInfo.last_sampled);
+                            for(uint32_t i = 0; i < scriptInfo.count; ++i)
+                                ImGui::BulletText("Script %d (Id: %d)", scriptInfo.guid[i], scriptInfo.id[i]);
+                        }
                     }
                 }
             }

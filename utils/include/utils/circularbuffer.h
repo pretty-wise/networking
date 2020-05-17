@@ -13,7 +13,10 @@ public:
   void PushBack(const T &v);
 
   T *Begin();
+  const T *Begin() const;
+
   T *End();
+  const T *End() const;
 
   size_t Size() const;
   size_t Capacity() const;
@@ -72,8 +75,10 @@ template <class T> size_t CircularBuffer<T>::PopFront(size_t count) {
 }
 
 template <class T> T *CircularBuffer<T>::Begin() { return m_read; }
+template <class T> const T *CircularBuffer<T>::Begin() const { return m_read; }
 
 template <class T> T *CircularBuffer<T>::End() { return m_write; }
+template <class T> const T *CircularBuffer<T>::End() const { return m_write; }
 
 template <class T> size_t CircularBuffer<T>::Size() const {
   assert(m_write >= m_read);

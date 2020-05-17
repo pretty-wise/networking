@@ -24,3 +24,8 @@ struct siminput_t {
 bool is_pressed(const siminput_t *i, uint32_t b);
 bool is_released(const siminput_t *i, uint32_t b);
 bool is_hold(const siminput_t *i, uint32_t b);
+
+typedef uint32_t scriptid_t;
+typedef uint32_t scriptguid_t;
+
+#define SIMSERVER_SCRIPT_CAPACITY 4

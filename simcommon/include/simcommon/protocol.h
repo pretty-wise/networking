@@ -40,10 +40,18 @@ struct UpdateMessage {
   // information along with simulation configuration
   entityid_t m_local_entity;
 
-  uint32_t m_entity_count;
+  uint32_t m_entity_movement_count;
+  uint32_t m_script_update_count;
 };
 
-struct EntityUpdate {
+struct MovementUpdate {
   entityid_t m_id;
   entitymovement_t m_movement;
+};
+
+struct ScriptUpdate {
+  entityid_t m_id;
+  bool m_create;
+  bool m_destroy;
+  uint32_t m_payload_size;
 };

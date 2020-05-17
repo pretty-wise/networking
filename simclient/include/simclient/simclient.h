@@ -39,7 +39,8 @@ struct sc_info {
 int simclient_info(sc_simulation *sim, sc_info *info);
 
 struct entityinfo_t {
-  entitymovement_t movement;
+  entitymovement_t movement_predicted;
+  entitymovement_t movement_confirmed;
   frameid_t confirmed;
   frameid_t predicted;
   frameid_t last_error;
@@ -47,3 +48,14 @@ struct entityinfo_t {
 
 int simclient_entity_movement(sc_simulation *sim, entityid_t **ids,
                               entityinfo_t **data, uint32_t *count);
+
+struct sc_script_info {
+  scriptid_t id[SIMSERVER_SCRIPT_CAPACITY];
+  scriptguid_t guid[SIMSERVER_SCRIPT_CAPACITY];
+  uint32_t count;
+  frameid_t last_changed;
+  frameid_t last_sampled;
+};
+
+int simclient_entity_script(sc_simulation *sim, sc_script_info *info,
+                            entityid_t entity);

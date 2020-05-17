@@ -311,11 +311,12 @@ void netserver_update(struct ns_server *context) {
       header->m_sequence = endpoint.m_reliability.GenerateNewSequenceId(
           &header->m_ack, &header->m_ack_bitmask);
 
-      context->m_send_cb(header->m_sequence, buffer + sizeof(PayloadPacket),
-                         nbytes - sizeof(PayloadPacket), &endpoint,
-                         context->m_user_data);
+      nbytes = context->m_send_cb(
+          header->m_sequence, buffer + sizeof(PayloadPacket),
+          nbytes - sizeof(PayloadPacket), &endpoint, context->m_user_data);
 
-      if(netserver_send(context, endpoint.m_address, buffer, nbytes)) {
+      if(netserver_send(context, endpoint.m_address, buffer,
+                        nbytes + sizeof(PayloadPacket))) {
         LOG_TRANSPORT_DBG("sent: PacketType::Payload");
       }
       endpoint.m_last_send_time = get_time_ms();

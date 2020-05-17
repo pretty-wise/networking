@@ -10,7 +10,6 @@ struct entitymovement_t;
 
 struct ss_config {
   uint32_t frame_duration;
-  uint64_t start_time;
   frameid_t start_frame;
 };
 
@@ -54,3 +53,12 @@ int simserver_entity_destroy(ss_simulation *sim, entityid_t entity);
 
 int simserver_entity_movement(ss_simulation *sim, entityid_t **ids,
                               entitymovement_t **data, uint32_t *count);
+
+struct ss_script_info {
+  scriptid_t id[SIMSERVER_SCRIPT_CAPACITY];
+  scriptguid_t guid[SIMSERVER_SCRIPT_CAPACITY];
+  uint32_t count;
+};
+
+int simserver_entity_script(ss_simulation *sim, ss_script_info *info,
+                            entityid_t entity);

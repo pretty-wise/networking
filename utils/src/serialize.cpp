@@ -63,7 +63,7 @@ uint32_t BitWriter::Flush() {
     m_scratch_bits = 0;
     m_scratch = 0;
   }
-  return (m_write_word - 1) * 4;
+  return m_write_word * 4;
 }
 
 uint64_t BitWriter::BitsAvailable() const {
@@ -89,6 +89,7 @@ BitReader::BitReader(const uint8_t *buffer, uint32_t nbytes)
 uint32_t BitReader::ReadBits(int bits) {
   assert(bits > 0);
   assert(bits <= 32);
+  assert(IsAvailable(bits));
 
   if(m_scratch_bits < bits) {
     // handle endianness here if big endian needs to be supported
