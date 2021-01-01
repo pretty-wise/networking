@@ -337,6 +337,31 @@ void netserver_update(struct ns_server *context) {
   }
 }
 
+int netserver_rtt_info(ns_server *context, ns_endpoint **endpoints,
+                       uint32_t *averaged_rtt, uint32_t *frame_rtt,
+                       uint32_t *endpoint_count) {
+  if(!context || !endpoints || !endpoint_count)
+    return -1;
+
+  if(*endpoint_count < context->m_endpoint_count)
+    return -2;
+
+  uint32_t index = 0;
+  for(uint32_t eidx = 0; eidx < context->m_endpoint_count; ++eidx) {
+    if(context->m_endpoints[eidx].m_state == ns_endpoint::State::Connected) {
+      endpoints[index] = &context->m_endpoints[eidx];
+      averaged_rtt[index] =
+          context->m_endpoints[eidx].m_reliability.m_smoothed_rtt;
+      frame_rtt[index] = context->m_endpoints[eidx].m_reliability.m_last_rtt;
+      ++index;
+    }
+  }
+
+  *endpoint_count = context->m_endpoint_count;
+
+  return 0;
+}
+
 int netserver_transport_info(ns_server *context, ns_endpoint *endpoint,
                              ns_transport_info *info) {
   if(!context || !endpoint || !info)

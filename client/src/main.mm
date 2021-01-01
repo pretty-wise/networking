@@ -241,6 +241,13 @@ static void src_state_func(uint32_t state, ns_endpoint* e, void* user_data) {
     }
 
     if(simServer) {
+
+        //const uint32_t maxPeerCount = 16;
+        //uint32_t peerCount = maxPeerCount;
+        //ns_endpoint* endpoints[maxPeerCount];
+        //uint32_t average_rtt[maxPeerCount];
+        //int res = netserver_rtt_info(netServer, endpoints, average_rtt, nullptr, &peerCount);
+        //assert(res == 0);
         simserver_update(simServer);
     }
 

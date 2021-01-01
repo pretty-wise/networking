@@ -45,6 +45,10 @@ struct ns_transport_info {
   uint32_t rtt_log_size;
 };
 
+int netserver_rtt_info(ns_server *context, ns_endpoint **endpoints,
+                       uint32_t *averaged_rtt, uint32_t *frame_rtt,
+                       uint32_t *endpoint_count);
+
 int netserver_transport_info(ns_server *context, ns_endpoint *endpoint,
                              ns_transport_info *info);
 }
