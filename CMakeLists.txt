@@ -157,11 +157,11 @@ target_include_directories (simclient PUBLIC
 # server executable
 #
 
-add_executable (server
-	server/src/main.cpp
+add_executable (sample_server
+	samples/sample_server/src/main.cpp
 )
 
-target_link_libraries(server PRIVATE netserver)
+target_link_libraries(sample_server  PRIVATE netserver)
 
 #
 # client executable
@@ -171,12 +171,12 @@ find_package(glfw3)
 find_package(OpenGL)
 find_package(glew CONFIG)
 
-add_executable (client
-	client/src/main.mm
-	client/src/imgui_impl_opengl2.cpp
-	client/src/imgui_impl_opengl2.h
-	client/src/imgui_impl_osx.h
-	client/src/imgui_impl_osx.mm
+add_executable (sample_listenserver
+	samples/sample_listenserver/src/main.mm
+	samples/sample_listenserver/src/imgui_impl_opengl2.cpp
+	samples/sample_listenserver/src/imgui_impl_opengl2.h
+	samples/sample_listenserver/src/imgui_impl_osx.h
+	samples/sample_listenserver/src/imgui_impl_osx.mm
 )
 
-target_link_libraries(client PRIVATE netclient netserver netcommon simclient simserver imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)
+target_link_libraries(sample_listenserver PRIVATE netclient netserver netcommon simclient simserver imgui "-framework Foundation" "-framework Cocoa" OpenGL::GL)
